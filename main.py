@@ -182,9 +182,13 @@ class GhostDL:
             id = i.find_all("td", attrs={"align": "right"})
             key = i.find_all("td", attrs={"class": "clickable-row"})[0].find("a")
 
-            disk = cd[-1].text
-            track = id[0].text[:-1]
-            title = key.text
+            disk = (
+                cd[-1].text.strip()
+                if cd[-1].text.strip() == ""
+                else f"CD{cd[-1].text.strip()} "
+            )
+            track = id[0].text[:-1].strip()
+            title = key.text.strip()
             url = f"https://downloads.khinsider.com{key['href']}"
 
             song_soup = bs(requests.get(url, headers=headers).content, "html.parser")
@@ -225,7 +229,7 @@ class GhostDL:
         for i in soup_songs:
             with open(
                 op.join(
-                    self.dir, soup_fulltitle, f"CD{i[0]} {i[1]}. {i[2]}.{soup_filetype}"
+                    self.dir, soup_fulltitle, f"{i[0]}{i[1]}. {i[2]}.{soup_filetype}"
                 ),
                 "wb",
             ) as f:
@@ -242,13 +246,11 @@ class GhostDL:
                         f.write(data)
                         done = int(50 * dl / total_length)
                         sys.stdout.write(
-                            f" {self.dl}Downloading Song CD{i[0]} {i[1]}. {i[2]}.{soup_filetype}\r[%s%s]"
+                            f" {self.dl}Downloading Song {i[0]}{i[1]}. {i[2]}.{soup_filetype}\r[%s%s]"
                             % ("=" * done, " " * (50 - done))
                         )
                         sys.stdout.flush()
-            print(
-                f" {self.done}Song CD{i[0]} {i[1]}. {i[2]}.{soup_filetype} Downloaded"
-            )
+            print(f" {self.done}Song {i[0]}{i[1]}. {i[2]}.{soup_filetype} Downloaded")
         print()
         print(f"{self.final}Album Download Complete")
         print()
