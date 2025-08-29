@@ -39,3 +39,14 @@ python3 -m venv venv
 source venv/bin/activate
 pip install -r requirements.txt
 ```
+
+## Building
+
+Requirements: patchelf
+
+```bash
+mkdir build
+source venv/bin/activate
+pip install nuitka
+nuitka --onefile --follow-imports --main=ghost-dl.py --output-dir=build/
+```
