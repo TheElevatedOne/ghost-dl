@@ -54,6 +54,7 @@ class GhostDL:
     def __init__(
         self, url: str, dir, default: bool, quiet: bool, verbose: bool
     ) -> None:
+        # Colored ANSI Strings
         self.log = "\033[1;33m[LOG]\033[0m "
         self.error = "\033[31m[ERROR]\033[0m "
         self.input = "\033[1;34m[INPUT]\033[0m "
@@ -61,12 +62,14 @@ class GhostDL:
         self.done = "\033[38;2;0;255;40m[DONE]\033[0m "
         self.final = "\033[38;2;0;242;255m[FINAL]\033[0m "
 
+        # Exit if khinsider url not matched
         if "downloads.khinsider.com" not in url:
             print(f"{self.log}  URL not matching khinsider")
             print(f"{self.error}Invalid URL")
             sys.exit(1)
         else:
             self.url = url
+        # Output validity check
         if dir is not None:
             print(f"{self.log}Checking custom directory validity")
             if op.isdir(op.abspath(dir)):
@@ -79,7 +82,9 @@ class GhostDL:
         else:
             print(f"{self.log}Selecting current directory")
             self.dir = os.getcwd()
+        # Default tag
         self.default = default
+        # Verbose and quiet oppose each other, exit if it happends
         if quiet and verbose:
             print(f"{self.error}Quiet and Verbose cannot be used at the same time")
             sys.exit(1)
@@ -87,6 +92,7 @@ class GhostDL:
         self.verbose = verbose
 
     def filetype_input(self, type_list: list) -> None:
+        # Function as a workaround for input field loop
         print(f"{self.input}Enter a number a press Return/Enter")
         for i, filetype in enumerate(type_list):
             default = ""
@@ -95,16 +101,21 @@ class GhostDL:
             print(f"{i}) {filetype} {default}")
 
     def do_nothing(self):
+        # There is not a do nothing function
+        # I don't know why
         return
 
     def scraper(self):
+        # Headers are needed as it returns error otherwise
         headers = {
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/139.0.0.0 Safari/537.36"
         }
+        # Scrape the base webpage
         print(f"{self.log}Loading Webpage") if not self.quiet else self.do_nothing()
         page = requests.get(self.url, headers=headers)
         soup = bs(page.content, "html.parser")
 
+        # Reading Title, Year, Album, Filetypes, Album arts from the HTML
         print(f"{self.log}Reading Metadata") if not self.quiet else self.do_nothing()
         soup_title = soup.find_all("h2")[0].text
         print(
@@ -149,6 +160,7 @@ class GhostDL:
             for s in soup.find_all("div", attrs={"class": "albumImage"})
         ]
 
+        # Filetype Input Loop
         soup_filetype = soup_file[-1]
         if not self.default:
             print()
@@ -170,6 +182,7 @@ class GhostDL:
                     print()
                     self.filetype_input(soup_file)
 
+        # Getting song information and scraping their download url
         print(
             f"{self.log}Loading Songs (This will take a while)"
         ) if not self.quiet else self.do_nothing()
@@ -199,6 +212,7 @@ class GhostDL:
 
             soup_songs.append([disk, track, title, song_link, url])
 
+        # Downloading Album Arts
         print(f"{self.log}Preparing Download Folder")
         os.mkdir(op.join(self.dir, soup_fulltitle)) if not op.isdir(
             op.join(self.dir, soup_fulltitle)
@@ -224,6 +238,8 @@ class GhostDL:
                         )
                         sys.stdout.flush()
             print(f" {self.done}Cover #{i:02} Downloaded")
+
+        # Downloading Songs
         print()
         print(f"{self.log}Starting Download of Songs")
         for i in soup_songs:
