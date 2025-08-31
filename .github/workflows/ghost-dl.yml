@@ -46,7 +46,6 @@ jobs:
           include-hidden-files: true
 
       - name: Create Release
-        uses: actions/checkout@v4
         uses: ncipollo/release-action@v1
         with:
           artifacts: "ghost-dl_*_x64.zip"
