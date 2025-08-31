@@ -1,6 +1,8 @@
 name: ghost-dl
 on:
-  - push
+  push:
+    tags:
+      - '*'
 jobs:
   build:
     strategy:
@@ -36,10 +38,17 @@ jobs:
       - name: Upload Artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ runner.os }} Build
+          name: ghost-dl_${{ matrix.os }}_x64
           path: |
             build/*.exe
             build/*.bin
             build/*.app/**/*
-            build/*.dist/**/*
           include-hidden-files: true
+
+      - name: Create Release
+        uses: actions/checkout@v4
+        uses: ncipollo/release-action@v1
+        with:
+          artifacts: "ghost-dl_*_x64.zip"
+          name: ${{ github.ref_name }} - ghost_dl
+          bodyFile: "RELEASE_BODY.md"
