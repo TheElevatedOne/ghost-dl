@@ -38,7 +38,7 @@ jobs:
       - name: Upload Artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: ghost-dl_${{ matrix.os }}_x64
+          name: ghost-dl_${{ matrix.os }}_${{ github.ref_name }}
           path: |
             build/*.exe
             build/*.bin
@@ -48,6 +48,8 @@ jobs:
       - name: Create Release
         uses: ncipollo/release-action@v1
         with:
-          artifacts: "ghost-dl_*_x64.zip"
+          artifacts: "ghost-dl_${{ matrix.os }}_${{ github.ref_name }}.zip"
+          replacesArtifacts: false
           name: ${{ github.ref_name }} - ghost_dl
           bodyFile: "RELEASE_BODY.md"
+          allowUpdates: true
