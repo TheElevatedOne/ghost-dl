@@ -35,11 +35,22 @@ jobs:
           script-name: ghost-dl.py
           mode: onefile
 
-      - if: ${{ !contains('windows',matrix.os) }}
+        # Both `${{ !contains('windows',matrix.os) }}` and `contains('windows',matrix.os) == false` didn't work, so just working around it
+      - if: contains('macos',matrix.os)
+        name: Rename Binary & Delete Build Directories (MacOS/Linux)
+        run: mv build/ghost-dl.bin build/ghost-dl && ls build/ && rm -r build/*.build build/*.dist build/*.onefile-build
+      - if: contains('ubuntu',matrix.os)
         name: Rename Binary & Delete Build Directories (MacOS/Linux)
         run: mv build/ghost-dl.bin build/ghost-dl && ls build/ && rm -r build/*.build build/*.dist build/*.onefile-build
 
-      - if: ${{ !contains('windows',matrix.os) }}
+      - if: contains('macos',matrix.os)
+        name: Upload Artifacts (Linux/MacOS)
+        uses: actions/upload-artifact@v4
+        with:
+          name: ghost-dl_${{ matrix.os }}_${{ github.ref_name }}
+          path: build/ghost-dl
+          include-hidden-files: true
+      - if: contains('ubuntu',matrix.os)
         name: Upload Artifacts (Linux/MacOS)
         uses: actions/upload-artifact@v4
         with:
@@ -54,7 +65,10 @@ jobs:
           path: build/ghost-dl.exe
           include-hidden-files: true
 
-      - if: ${{ !contains('windows',matrix.os) }}
+      - if: contains('macos',matrix.os)
+        name: Create Tar Archives (Linux/MacOS)
+        run: tar --xz -cvf build/ghost-dl_${{ matrix.os}}.tar.xz build/ghost-dl
+      - if: contains('ubuntu',matrix.os)
         name: Create Tar Archives (Linux/MacOS)
         run: tar --xz -cvf build/ghost-dl_${{ matrix.os}}.tar.xz build/ghost-dl
       - if: contains('windows',matrix.os)
