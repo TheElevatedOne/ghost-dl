@@ -14,7 +14,7 @@ def arg_parser() -> argparse.Namespace:
     parser.add_argument(
         "-u",
         "--url",
-        required=False,
+        required=True,
         type=str,
         help="URL of the Soundtrack to download",
     )
