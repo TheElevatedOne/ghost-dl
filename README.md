@@ -1,14 +1,18 @@
 # ghost-dl
 
-### A CLI downloader for khinsiders Game OST Archive
+### A CLI downloader for [Kingdom Hearts Insider Game OST Archive](https://downloads.khinsider.com)
+
+![ghost-dl-logo](https://github.com/TheElevatedOne/ghost-dl/blob/main/assets/logo.png?raw=true)
 
 ---
 
-## Preview
+# Preview
 
 <https://github.com/user-attachments/assets/77b7bc61-1400-41f4-933e-684adadbb28d>
 
-## Usage
+# Usage
+
+### Binaries can be found in the [Releases](https://github.com/TheElevatedOne/ghost-dl/releases/latest) section
 
 ```
 usage: ghost-dl [-h] [-u URL] [-o OUTPUT] [-d] [-q] [-v]
@@ -22,15 +26,17 @@ options:
   -v, --verbose        Show more Log Messages
 ```
 
-- URL - a downloads.khinsiders url (ex. <https://downloads.khinsider.com/game-soundtracks/album/minecraft>)
+- URL - a downloads.khinsider url (ex. https://downloads.khinsider.com/game-soundtracks/album/minecraft)
 - Output - a valid existing directory, will set to current directory if not set
 - Default - Without this flag, the script will prompt the user to enter the file type to download (eg. mp3, flac, ogg, etc.). If set, it will select the highest quality files.
 - Quiet - Supresses unneeded logging meassages
 - Verbose - Logs more messages
 
-## Development Setup
+# Development Setup
 
-Requirements: Python3, Venv
+## Linux
+
+**Requirements:** Python3, Venv
 
 ```bash
 git clone https://github.com/TheElevatedOne/ghost-dl.git
@@ -40,15 +46,9 @@ source venv/bin/activate
 pip install -r requirements.txt
 ```
 
-## Building
+### Building
 
-### Automatic Build has been Setup via Github Actions
-
----
-
-### Linux
-
-*Requirements:* patchelf, ccache
+**Requirements:** patchelf, ccache
 
 ```bash
 mkdir build
@@ -56,3 +56,7 @@ source venv/bin/activate
 pip install nuitka
 nuitka --onefile --follow-imports --main=ghost-dl.py --output-dir=build/
 ```
+
+---
+
+The Original name was supposed to be `ost-dl` but that is kinda lame, so I went with **ghost-dl** which still incorporates the information along with an identity.
