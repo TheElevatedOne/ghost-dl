@@ -35,21 +35,31 @@ jobs:
           script-name: ghost-dl.py
           mode: onefile
 
-      - name: Delete Build Directory
-        run: ls build/ && rm -r build/*.build build/*.dist build/*.onefile-build
+      - if: false == contains("windows",${{ matrix.os }})
+        name: Rename Binary & Delete Build Directories (MacOS/Linux)
+        run: mv build/ghost-dl.bin build/ghost-dl && ls build/ && rm -r build/*.build build/*.dist build/*.onefile-build
 
-      - name: Upload Artifacts
+      - if: false == contains("windows",${{ matrix.os }})
+        name: Upload Artifacts (Linux/MacOS)
         uses: actions/upload-artifact@v4
         with:
           name: ghost-dl_${{ matrix.os }}_${{ github.ref_name }}
-          path: |
-            build/*.exe
-            build/*.bin
-            build/*.app/**/*
+          path: build/ghost-dl
+          include-hidden-files: true
+      - if: contains("windows",${{ matrix.os }})
+        name: Upload Artifacts (Windows)
+        user: actions/upload-artifact@v4
+        with:
+          name: ghost-dl_${{ matrix.os }}_${{ github.ref_name }}
+          path: build/ghost-dl.exe
           include-hidden-files: true
 
-      - name: Create Tar Archives
-        run: tar --xz -cvf build/ghost-dl_${{ matrix.os}}_${{ github.ref_name }}.tar.xz build/*
+      - if: false == contains("windows",${{ matrix.os }})
+        name: Create Tar Archives (Linux/MacOS)
+        run: tar --xz -cvf build/ghost-dl_${{ matrix.os}}_${{ github.ref_name }}.tar.xz build/ghost-dl
+      - if: contains("windows",${{ matrix.os }})
+        name: Create Tar Archives (Windows)
+        run: tar --xz -cvf build/ghost-dl_${{ matrix.os}}_${{ github.ref_name }}.tar.xz build/ghost-dl.exe
 
       - name: Create Github Release
         uses: ncipollo/release-action@v1
