@@ -42,7 +42,13 @@ pip install -r requirements.txt
 
 ## Building
 
-Requirements: patchelf
+### Automatic Build has been Setup via Github Actions
+
+---
+
+### Linux
+
+*Requirements:* patchelf, ccache
 
 ```bash
 mkdir build
