@@ -48,7 +48,7 @@ jobs:
           include-hidden-files: true
       - if: contains("windows",${{ matrix.os }})
         name: Upload Artifacts (Windows)
-        user: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v4
         with:
           name: ghost-dl_${{ matrix.os }}_${{ github.ref_name }}
           path: build/ghost-dl.exe
