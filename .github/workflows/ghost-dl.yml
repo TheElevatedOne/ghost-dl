@@ -47,6 +47,8 @@ jobs:
 
       - name: Create Release
         uses: ncipollo/release-action@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           artifacts: "ghost-dl_${{ matrix.os }}_${{ github.ref_name }}.zip"
           replacesArtifacts: false
