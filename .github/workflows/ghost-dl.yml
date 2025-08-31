@@ -45,12 +45,15 @@ jobs:
             build/*.app/**/*
           include-hidden-files: true
 
-      - name: Create Release
+      - name: Create Tar Archives
+        run: tar --xz -cvf /ghost-dl_${{ matrix.os}}_${{ github.ref_name }}.tar.xz build/*.exe build/*.bin build/*.app/**/*
+
+      - name: Create Github Release
         uses: ncipollo/release-action@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          artifacts: "build/ghost-dl_${{ matrix.os }}_${{ github.ref_name }}.zip,build/ghost-dl_${{ matrix.os }}_${{ github.ref_name }}.zip"
+          artifacts: /ghost-dl_${{ matrix.os }}_${{ github.ref_name }}.tar.xz
           replacesArtifacts: false
           name: ${{ github.ref_name }} - ghost_dl
           bodyFile: "RELEASE_BODY.md"
