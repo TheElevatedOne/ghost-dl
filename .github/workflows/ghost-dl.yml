@@ -80,7 +80,7 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          artifacts: build/ghost-dl_${{ matrix.os }}.tar.xz
+          artifacts: build/ghost-dl_${{ matrix.os }}.tar.gz
           replacesArtifacts: false
           name: ${{ github.ref_name }} - ghost_dl
           bodyFile: "RELEASE_BODY.md"
