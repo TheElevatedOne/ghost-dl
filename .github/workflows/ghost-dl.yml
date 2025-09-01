@@ -70,13 +70,13 @@ jobs:
 
       - if: matrix.os == 'macos-latest'
         name: Create Tar Archives (MacOS)
-        run: tar -czvf build/ghost-dl_${{ matrix.os }}.tar.gz -C build .
+        run: tar --exclude=build/ghost-dl_${{ matrix.os }}.tar.gz -czvf build/ghost-dl_${{ matrix.os }}.tar.gz -C build .
       - if: matrix.os == 'ubuntu-latest'
         name: Create Tar Archives (Linux)
-        run: tar -czvf build/ghost-dl_${{ matrix.os }}.tar.gz -C build .
+        run: tar --exclude=build/ghost-dl_${{ matrix.os }}.tar.gz -czvf build/ghost-dl_${{ matrix.os }}.tar.gz -C build .
       - if: matrix.os == 'windows-latest'
         name: Create Tar Archives (Windows)
-        run: tar -czvf build/ghost-dl_${{ matrix.os }}.tar.gz -C build .
+        run: tar --exclude=build/ghost-dl_${{ matrix.os }}.tar.gz -czvf build/ghost-dl_${{ matrix.os }}.tar.gz -C build .
 
       - name: Create Github Release
         uses: ncipollo/release-action@v1
