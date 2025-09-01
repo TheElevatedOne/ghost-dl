@@ -21,5 +21,6 @@ package() {
 
   mkdir -p extracted
   tar -xzf "ghost-dl_ubuntu-latest.tar.gz" -C extracted
-  install -Dm755 "extracted/build/ghost-dl" "$pkgdir/usr/bin/ghost-dl"
+  install -Dm755 "extracted/ghost-dl" "$pkgdir/usr/bin/ghost-dl"
+  install -Dm644 "extracted/LICENSE" "$pkgdir/usr/share/license/$pkgname/LICENSE"
 }
