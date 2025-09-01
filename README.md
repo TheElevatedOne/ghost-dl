@@ -2,7 +2,11 @@
 
 ### A CLI downloader for [Kingdom Hearts Insider Game OST Archive](https://downloads.khinsider.com)
 
-![ghost-dl-logo](https://github.com/TheElevatedOne/ghost-dl/blob/main/assets/logo.png?raw=true)
+[![AUR Version](https://img.shields.io/aur/version/ghost-dl-git?style=for-the-badge&logo=git&logoColor=white&label=AUR%20GHOST-DL-GIT)](https://aur.archlinux.org/packages/ghost-dl-git) [![AUR Version](https://img.shields.io/aur/version/ghost-dl-bin?style=for-the-badge&logo=archlinux&logoColor=white&label=AUR%20GHOST-DL-BIN)](https://aur.archlinux.org/packages/ghost-dl-bin) [![GitHub Release](https://img.shields.io/github/v/release/TheElevatedOne/ghost-dl?display_name=release&style=for-the-badge)](https://github.com/TheElevatedOne/ghost-dl/releases/latest)
+
+
+
+![ghost-dl-logo](https://github.com/TheElevatedOne/ghost-dl/blob/main/assets/logo.png?raw=true) 
 
 ---
 
