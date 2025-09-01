@@ -65,15 +65,18 @@ jobs:
           path: build/ghost-dl.exe
           include-hidden-files: true
 
+      - name: Download LICENSE from Repo
+        run: curl https://raw.githubusercontent.com/TheElevatedOne/ghost-dl/refs/heads/main/LICENSE -o build/LICENSE
+
       - if: matrix.os == 'macos-latest'
         name: Create Tar Archives (MacOS)
-        run: tar -czvf build/ghost-dl_${{ matrix.os}}.tar.gz build/ghost-dl
+        run: tar -czvf build/ghost-dl_${{ matrix.os }}.tar.gz -C build .
       - if: matrix.os == 'ubuntu-latest'
         name: Create Tar Archives (Linux)
-        run: tar -czvf build/ghost-dl_${{ matrix.os}}.tar.gz build/ghost-dl
+        run: tar -czvf build/ghost-dl_${{ matrix.os }}.tar.gz -C build .
       - if: matrix.os == 'windows-latest'
         name: Create Tar Archives (Windows)
-        run: tar -czvf build/ghost-dl_${{ matrix.os}}.tar.gz build/ghost-dl.exe
+        run: tar -czvf build/ghost-dl_${{ matrix.os }}.tar.gz -C build .
 
       - name: Create Github Release
         uses: ncipollo/release-action@v1
