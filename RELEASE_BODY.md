@@ -1,3 +1,4 @@
 # Changelog
 
-- Fixed a NoneType comparison error when no argument is used
+- Added LICENSE to Release Tar
+- Added AUR PKGBUILD files
