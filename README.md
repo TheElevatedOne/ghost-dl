@@ -4,9 +4,7 @@
 
 [![AUR Version](https://img.shields.io/aur/version/ghost-dl-git?style=for-the-badge&logo=git&logoColor=white&label=AUR%20GHOST-DL-GIT)](https://aur.archlinux.org/packages/ghost-dl-git) [![AUR Version](https://img.shields.io/aur/version/ghost-dl-bin?style=for-the-badge&logo=archlinux&logoColor=white&label=AUR%20GHOST-DL-BIN)](https://aur.archlinux.org/packages/ghost-dl-bin) [![GitHub Release](https://img.shields.io/github/v/release/TheElevatedOne/ghost-dl?display_name=release&style=for-the-badge)](https://github.com/TheElevatedOne/ghost-dl/releases/latest)
 
-
-
-![ghost-dl-logo](https://github.com/TheElevatedOne/ghost-dl/blob/main/assets/logo.png?raw=true) 
+![ghost-dl-logo](https://github.com/TheElevatedOne/ghost-dl/blob/main/assets/logo.png?raw=true)
 
 ---
 
@@ -19,22 +17,37 @@
 ### Binaries can be found in the [Releases](https://github.com/TheElevatedOne/ghost-dl/releases/latest) section
 
 ```
-usage: ghost-dl [-h] [-u URL] [-o OUTPUT] [-d] [-q] [-v]
+usage: ghost-dl [-h] [-o OUTPUT] [-t THREADS] [-d] [-q] [-v] INPUT
 
-options:
-  -h, --help           show this help message and exit
-  -u, --url URL        URL of the Soundtrack to download
-  -o, --output OUTPUT  Output directory (Current if not set)
-  -d, --default        Select the highest quality files without manual input
-  -q, --quiet          Suppress Log Messages
-  -v, --verbose        Show more Log Messages
+Positional:
+  INPUT                 Song URL / Batch File
+
+Help:
+  -h, --help            Show a Help Message
+
+Optional:
+  -o, --output OUTPUT   Output directory (Current if not set)
+  -t, --threads THREADS
+                        Number of download threads (default = 4; CPU Threads / 2)
+  -d, --default         Select the highest quality files without manual input
+
+Logging:
+  -q, --quiet           Suppress Log Messages
+  -v, --verbose         Show More Log Messages
 ```
 
-- URL - a downloads.khinsider url (ex. https://downloads.khinsider.com/game-soundtracks/album/minecraft)
+- INPUT - a **downloads.khinsider url** (ex. <https://downloads.khinsider.com/game-soundtracks/album/minecraft>) or a **file with multiple urls in lines** for **batch processing**
 - Output - a valid existing directory, will set to current directory if not set
+- Threads - uses multithreading to speed up loading and downloading, defaults to CPU Cores (eg. CPU Threads / 2)
 - Default - Without this flag, the script will prompt the user to enter the file type to download (eg. mp3, flac, ogg, etc.). If set, it will select the highest quality files.
 - Quiet - Supresses unneeded logging meassages
 - Verbose - Logs more messages
+
+### Exceptions and Errors
+
+Most errors are being caught, other than errors from multiprocessing, as after trying multiple solutions to catch exceptions in multiple processes nothing worked.
+
+If someone more knowledgeable than me knows how to fix this, either create an Enhancement Issue or Create a Pull Request.
 
 # Development Setup
 
@@ -55,10 +68,13 @@ pip install -r requirements.txt
 **Requirements:** patchelf, ccache
 
 ```bash
+# run nuitka-build.sh
+./nuitka-build.sh
+
+# or manually
+
 mkdir build
-source venv/bin/activate
-pip install nuitka
-nuitka --onefile --follow-imports --main=ghost-dl.py --output-dir=build/
+nuitka --onefile --follow-imports --main=ghost_dl.py --output-dir=build --output-filename=ghost-dl
 ```
 
 ---
