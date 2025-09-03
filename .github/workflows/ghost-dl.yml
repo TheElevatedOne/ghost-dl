@@ -44,7 +44,7 @@ jobs:
         run: mv build/ghost_dl.bin build/ghost-dl && ls build/ && rm -r build/*.build build/*.dist build/*.onefile-build
       - if: matrix.os == 'windows-latest'
         name: Rename Binary (Windows)
-        run: mv build/ghost_dl.exe build/ghost-dl.exe     
+        run: mv build/ghost_dl.exe build/ghost-dl.exe
 
       - if: matrix.os == 'macos-latest'
         name: Upload Artifacts (MacOS)
