@@ -181,28 +181,12 @@ class GhostDL:
             except Exception:
                 dl_count.append(0)
 
-    def scraper(self) -> None:
-        """Main Scraper"""
-        # Scrape the base webpage
-        sys.stdout.write(
-            f"{self.log}Loading Webpage"
-        ) if not self.quiet else self.do_nothing()
-        sys.stdout.flush() if not self.quiet else self.do_nothing()
-        start: float = time.perf_counter()
-        page = requests.get(self.url, headers=self.headers)
+    def webpage_scraper(self, url: str) -> dict:
+        start_timer: float = time.perf_counter()
+        page = requests.get(url, headers=self.headers)
         soup = bs(page.content, "html.parser")
-        end: float = time.perf_counter()
-        sys.stdout.write(
-            f" [{round(end - start, 2)}s]\n"
-        ) if not self.quiet else self.do_nothing()
-        sys.stdout.flush() if not self.quiet else self.do_nothing()
 
-        # Reading Title, Year, Album, Filetypes, Album arts from the HTML
-        print(f"{self.log}Reading Metadata") if not self.quiet else self.do_nothing()
         soup_title = soup.find_all("h2")[0].text
-        print(
-            f"{self.log}Album title: {soup_title}"
-        ) if self.verbose else self.do_nothing()
         soup_year: str = (
             [
                 s
@@ -212,9 +196,6 @@ class GhostDL:
             .split(" ")[-1]
             .strip()
         )
-        print(
-            f"{self.log}Album year: {soup_year}"
-        ) if self.verbose else self.do_nothing()
         soup_type: str = (
             [
                 s
@@ -224,9 +205,6 @@ class GhostDL:
             .split(" ")[-1]
             .strip()
         )
-        print(
-            f"{self.log}Album type: {soup_type}"
-        ) if self.verbose else self.do_nothing()
         soup_file: list[str] = [
             d.replace("(", "").replace(")", "").replace(",", "").strip().lower()
             for d in [
@@ -242,27 +220,62 @@ class GhostDL:
             for s in soup.find_all("div", attrs={"class": "albumImage"})
         ]
 
+        end_timer: float = time.perf_counter()
+        return {
+            "title": soup_title,
+            "year": soup_year,
+            "type": soup_type,
+            "filetype": soup_file,
+            "fulltitle": soup_fulltitle,
+            "albumart": soup_albumart,
+            "timer": round(end_timer - start_timer, 2),
+            "soup": soup,
+        }
+
+    def scraper(self) -> None:
+        """Main Scraper"""
+        # Scrape the base webpage
+        sys.stdout.write(
+            f"{self.log}Loading Webpage"
+        ) if not self.quiet else self.do_nothing()
+        sys.stdout.flush() if not self.quiet else self.do_nothing()
+        scrap = self.webpage_scraper(self.url)
+        sys.stdout.write(
+            f" [{scrap['timer']}s]\n"
+        ) if not self.quiet else self.do_nothing()
+        sys.stdout.flush() if not self.quiet else self.do_nothing()
+
+        print(
+            f"{self.log}Album title: {scrap['title']}"
+        ) if self.verbose else self.do_nothing()
+        print(
+            f"{self.log}Album year: {scrap['year']}"
+        ) if self.verbose else self.do_nothing()
+        print(
+            f"{self.log}Album type: {scrap['type']}"
+        ) if self.verbose else self.do_nothing()
+
         # Filetype Input Loop
-        soup_filetype = soup_file[-1]
+        soup_filetype = scrap["filetype"][-1]
         if not self.default:
             print()
-            self.filetype_input(soup_file)
+            self.filetype_input(scrap["filetype"])
             while True:
                 try:
                     select = input(":")
                     soup_filetype = int(select)
-                    if (len(soup_file) - 1) < soup_filetype:
+                    if (len(scrap["filetype"]) - 1) < soup_filetype:
                         raise ValueError(
                             f"{soup_filetype} is larger than the list length"
                         )
                     else:
-                        soup_filetype = soup_file[soup_filetype]
+                        soup_filetype = scrap["filetype"][soup_filetype]
                         print()
                         break
                 except Exception:
                     print(f"{self.error}Not a valid input")
                     print()
-                    self.filetype_input(soup_file)
+                    self.filetype_input(scrap["filetype"])
 
         # Getting song information and scraping their download url
         sys.stdout.write(
@@ -270,7 +283,9 @@ class GhostDL:
         ) if not self.quiet else self.do_nothing()
         sys.stdout.flush() if not self.quiet else self.do_nothing()
         start: float = time.perf_counter()
-        soup_songlist = soup.find("table", attrs={"id": "songlist"}).find_all("tr")
+        soup_songlist = (
+            scrap["soup"].find("table", attrs={"id": "songlist"}).find_all("tr")
+        )
         soup_songs = []
         for q, i in enumerate(soup_songlist):
             cd = i.find_all("td", attrs={"align": "center"})
@@ -326,17 +341,17 @@ class GhostDL:
         print(
             f"{self.log}Preparing Download Folder"
         ) if not self.quiet else self.do_nothing()
-        os.mkdir(op.join(self.dir, soup_fulltitle)) if not op.isdir(
-            op.join(self.dir, soup_fulltitle)
+        os.mkdir(op.join(self.dir, scrap["fulltitle"])) if not op.isdir(
+            op.join(self.dir, scrap["fulltitle"])
         ) else self.do_nothing()
         jobs = []
         dl_count = self.manager.list()
-        for i, url in enumerate(soup_albumart):
+        for i, url in enumerate(scrap["albumart"]):
             j = multiprocessing.Process(
                 target=self.downloader,
                 args=(
                     url,
-                    op.join(self.dir, soup_fulltitle),
+                    op.join(self.dir, scrap["fulltitle"]),
                     f"cover_{i}",
                     op.splitext(url)[-1].replace(".", ""),
                     dl_count,
@@ -346,23 +361,23 @@ class GhostDL:
             j.start()
 
         art_bar = tqdm(
-            enumerate(soup_albumart),
+            enumerate(scrap["albumart"]),
             disable=False if not self.quiet else True,
             leave=True,
             bar_format="{desc} {percentage:3.0f}%|{bar}| {n_fmt}/{total_fmt} [{elapsed} | {rate_fmt}{postfix}]",
-            total=len(soup_albumart),
+            total=len(scrap["albumart"]),
             desc=f"{self.log}Downloading Covers",
         )
 
-        while len(dl_count) < len(soup_albumart):
+        while len(dl_count) < len(scrap["albumart"]):
             start_value = len(dl_count)
             time.sleep(0.5)
             end_value = len(dl_count)
             if end_value != start_value:
                 art_bar.update()
         del dl_count
-        if art_bar.n < len(soup_albumart):
-            art_bar.update(len(soup_albumart) - art_bar.n)
+        if art_bar.n < len(scrap["albumart"]):
+            art_bar.update(len(scrap["albumart"]) - art_bar.n)
         art_bar.close()
 
         # Downloading Songs
@@ -371,7 +386,8 @@ class GhostDL:
         jobs = []
         for i in song_chunks:
             j = multiprocessing.Process(
-                target=self.parallel_song_dl, args=(i, soup_fulltitle, dl_count)
+                target=self.parallel_song_dl,
+                args=(i, op.join(self.dir, scrap["fulltitle"]), dl_count),
             )
             jobs.append(j)
             j.start()
@@ -415,7 +431,5 @@ if __name__ == "__main__":
         print("\033[38;2;229;80;26m[INTERRUPT]\033[0m Process Stopped")
         sys.exit(1)
     except Exception as e:
-        with open("./test.log", "w") as f:
-            f.write(str(e))
-        f.close()
+        raise Exception(e)
     print()
