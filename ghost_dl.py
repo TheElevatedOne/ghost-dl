@@ -19,30 +19,33 @@ from bs4 import BeautifulSoup as bs
 
 def arg_parser() -> argparse.Namespace:
     "Argument Parser using the argparse library"
-    parser = argparse.ArgumentParser()
+    parser = argparse.ArgumentParser(add_help=False)
 
-    parser.add_argument(
-        "-u",
-        "--url",
-        required=True,
+    positional = parser.add_argument_group(title="Positional")
+    positional.add_argument(
+        "INPUT",
         type=str,
-        help="URL of the Soundtrack to download",
+        help="Song URL / Batch File",
     )
-    parser.add_argument(
+
+    help_args = parser.add_argument_group(title="Help")
+    help_args.add_argument("-h", "--help", action="help", help="Show a Help Message")
+    help_args.add_argument(
+        "-hh",
+        "--extra-help",
+        action="store_true",
+        help="Show a Help Message with Extra Information",
+    )
+
+    optional = parser.add_argument_group(title="Optional")
+    optional.add_argument(
         "-o",
         "--output",
         required=False,
         type=str,
         help="Output directory (Current if not set)",
     )
-    parser.add_argument(
-        "-d",
-        "--default",
-        required=False,
-        action="store_true",
-        help="Select the highest quality files without manual input",
-    )
-    parser.add_argument(
+    optional.add_argument(
         "-t",
         "--threads",
         required=False,
@@ -50,19 +53,28 @@ def arg_parser() -> argparse.Namespace:
         default=(psutil.cpu_count() // 2) if psutil.cpu_count() is not None else 1,
         help=f"Number of download threads (default = {(psutil.cpu_count() // 2) if psutil.cpu_count() is not None else 1}; CPU Threads / 2)",
     )
-    parser.add_argument(
+    optional.add_argument(
+        "-d",
+        "--default",
+        required=False,
+        action="store_true",
+        help="Select the highest quality files without manual input",
+    )
+
+    logs = parser.add_argument_group(title="Logging")
+    logs.add_argument(
         "-q",
         "--quiet",
         required=False,
         action="store_true",
         help="Suppress Log Messages",
     )
-    parser.add_argument(
+    logs.add_argument(
         "-v",
         "--verbose",
         required=False,
         action="store_true",
-        help="Show more Log Messages",
+        help="Show More Log Messages",
     )
 
     return parser.parse_args()
@@ -72,23 +84,27 @@ class GhostDL:
     """Kingdom Hearts Insider Game OST Downloader"""
 
     def __init__(
-        self, url: str, dir, default: bool, quiet: bool, verbose: bool, threads: int
+        self, main: str, dir, default: bool, quiet: bool, verbose: bool, threads: int
     ) -> None:
         # Colored ANSI Strings
-        self.log = "\033[1;33m[LOG]\033[0m "
-        self.error = "\033[31m[ERROR]\033[0m "
-        self.input = "\033[1;34m[INPUT]\033[0m "
-        self.dl = "\033[38;2;255;0;255m[DL]\033[0m "
-        self.done = "\033[38;2;0;255;40m[DONE]\033[0m "
-        self.final = "\033[38;2;0;242;255m[FINAL]\033[0m "
+        self.log: str = "\033[1;33m[LOG]\033[0m "
+        self.error: str = "\033[31m[ERROR]\033[0m "
+        self.input: str = "\033[1;34m[INPUT]\033[0m "
+        self.dl: str = "\033[38;2;255;0;255m[DL]\033[0m "
+        self.final: str = "\033[38;2;0;242;255m[FINAL]\033[0m "
 
         # Exit if khinsider url not matched
-        if "downloads.khinsider.com" not in url:
-            print(f"{self.log}  URL not matching khinsider")
-            print(f"{self.error}Invalid URL")
+        if "downloads.khinsider.com" not in main and not op.isfile(op.abspath(main)):
+            print(f"{self.log}Input not an URL nor a file")
+            print(f"{self.error}Invalid Input")
+            print(f"{self.log}Exiting")
             sys.exit(1)
-        else:
-            self.url = url
+        elif "downloads.khinsider.com" in main and not op.isfile(op.abspath(main)):
+            self.main: str = main
+            self.type: str = "url"
+        elif "downloads.khinsider.com" not in main and op.isfile(op.abspath(main)):
+            self.main: str = main
+            self.type: str = "batch"
         # Output validity check
         if dir is not None:
             print(f"{self.log}Checking custom directory validity")
@@ -107,6 +123,7 @@ class GhostDL:
         # Verbose and quiet oppose each other, exit if it happends
         if quiet and verbose:
             print(f"{self.error}Quiet and Verbose cannot be used at the same time")
+            print(f"{self.log}Exiting")
             sys.exit(1)
         self.quiet: bool = quiet
         self.verbose: bool = verbose
@@ -116,7 +133,7 @@ class GhostDL:
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/139.0.0.0 Safari/537.36"
         }
 
-        self.scraper()
+        self.app()
 
     def filetype_input(self, type_list: list[str]) -> None:
         """Input Checking Loop"""
@@ -182,6 +199,9 @@ class GhostDL:
                 dl_count.append(0)
 
     def webpage_scraper(self, url: str) -> dict:
+        """Base Website Scraper
+        Returns Album Metadata
+        Returns HTML Soup"""
         start_timer: float = time.perf_counter()
         page = requests.get(url, headers=self.headers)
         soup = bs(page.content, "html.parser")
@@ -232,194 +252,220 @@ class GhostDL:
             "soup": soup,
         }
 
-    def scraper(self) -> None:
-        """Main Scraper"""
-        # Scrape the base webpage
-        sys.stdout.write(
-            f"{self.log}Loading Webpage"
-        ) if not self.quiet else self.do_nothing()
-        sys.stdout.flush() if not self.quiet else self.do_nothing()
-        scrap = self.webpage_scraper(self.url)
-        sys.stdout.write(
-            f" [{scrap['timer']}s]\n"
-        ) if not self.quiet else self.do_nothing()
-        sys.stdout.flush() if not self.quiet else self.do_nothing()
+    def batch_prepare(self, file: str) -> list[str]:
+        urls: list[str] = []
+        with open(file, "r", encoding="utf-8") as f:
+            for i in f.readlines():
+                if "downloads.khinsider.com" not in i:
+                    print(f"{self.error}Batch File Contains Invalid URLs")
+                    print(f"{self.log}Exiting")
+                    sys.exit(0)
+                urls.append(i.strip())
+        if urls[-1] == []:
+            urls.pop()
+        return urls
 
-        print(
-            f"{self.log}Album title: {scrap['title']}"
-        ) if self.verbose else self.do_nothing()
-        print(
-            f"{self.log}Album year: {scrap['year']}"
-        ) if self.verbose else self.do_nothing()
-        print(
-            f"{self.log}Album type: {scrap['type']}"
-        ) if self.verbose else self.do_nothing()
+    def app(self) -> None:
+        """Main App Function"""
 
-        # Filetype Input Loop
-        soup_filetype = scrap["filetype"][-1]
-        if not self.default:
-            print()
-            self.filetype_input(scrap["filetype"])
-            while True:
-                try:
-                    select = input(":")
-                    soup_filetype = int(select)
-                    if (len(scrap["filetype"]) - 1) < soup_filetype:
-                        raise ValueError(
-                            f"{soup_filetype} is larger than the list length"
-                        )
-                    else:
-                        soup_filetype = scrap["filetype"][soup_filetype]
+        match self.type:
+            case "url":
+                main = list(self.main)
+            case "batch":
+                main = self.batch_prepare(self.main)
+        for m, job in enumerate(main):
+            print(
+                f"{self.log}Job #{m:02} Started"
+            ) if self.type != "url" and not self.quiet else self.do_nothing()
+            # Scrape the base webpage
+            sys.stdout.write(
+                f"{self.log}Loading Webpage"
+            ) if not self.quiet else self.do_nothing()
+            sys.stdout.flush() if not self.quiet else self.do_nothing()
+            scrap = self.webpage_scraper(job)
+            sys.stdout.write(
+                f" [{scrap['timer']}s]\n"
+            ) if not self.quiet else self.do_nothing()
+            sys.stdout.flush() if not self.quiet else self.do_nothing()
+
+            print(
+                f"{self.log}Album title: {scrap['title']}"
+            ) if self.verbose else self.do_nothing()
+            print(
+                f"{self.log}Album year: {scrap['year']}"
+            ) if self.verbose else self.do_nothing()
+            print(
+                f"{self.log}Album type: {scrap['type']}"
+            ) if self.verbose else self.do_nothing()
+
+            # Filetype Input Loop
+            soup_filetype = scrap["filetype"][-1]
+            if not self.default:
+                print()
+                self.filetype_input(scrap["filetype"])
+                while True:
+                    try:
+                        select = input(":")
+                        soup_filetype = int(select)
+                        if (len(scrap["filetype"]) - 1) < soup_filetype:
+                            raise ValueError(
+                                f"{soup_filetype} is larger than the list length"
+                            )
+                        else:
+                            soup_filetype = scrap["filetype"][soup_filetype]
+                            print()
+                            break
+                    except Exception:
+                        print(f"{self.error}Not a valid input")
                         print()
-                        break
-                except Exception:
-                    print(f"{self.error}Not a valid input")
-                    print()
-                    self.filetype_input(scrap["filetype"])
+                        self.filetype_input(scrap["filetype"])
 
-        # Getting song information and scraping their download url
-        sys.stdout.write(
-            f"{self.log}Loading Songs (This will take a while)"
-        ) if not self.quiet else self.do_nothing()
-        sys.stdout.flush() if not self.quiet else self.do_nothing()
-        start: float = time.perf_counter()
-        soup_songlist = (
-            scrap["soup"].find("table", attrs={"id": "songlist"}).find_all("tr")
-        )
-        soup_songs = []
-        for q, i in enumerate(soup_songlist):
-            cd = i.find_all("td", attrs={"align": "center"})
-            if cd == []:
-                continue
-            id = i.find_all("td", attrs={"align": "right"})
-            key = i.find_all("td", attrs={"class": "clickable-row"})[0].find("a")
-
-            disk = (
-                cd[-1].text.strip()
-                if cd[-1].text.strip() == ""
-                else f"CD{cd[-1].text.strip()} "
+            # Getting song information and scraping their download url
+            sys.stdout.write(
+                f"{self.log}Loading Songs (This will take a while)"
+            ) if not self.quiet else self.do_nothing()
+            sys.stdout.flush() if not self.quiet else self.do_nothing()
+            start: float = time.perf_counter()
+            soup_songlist = (
+                scrap["soup"].find("table", attrs={"id": "songlist"}).find_all("tr")
             )
-            track = id[0].text[:-1].strip()
-            title = key.text.strip()
-            url = f"https://downloads.khinsider.com{key['href']}"
+            soup_songs = []
+            for q, i in enumerate(soup_songlist):
+                cd = i.find_all("td", attrs={"align": "center"})
+                if cd == []:
+                    continue
+                id = i.find_all("td", attrs={"align": "right"})
+                key = i.find_all("td", attrs={"class": "clickable-row"})[0].find("a")
 
-            soup_songs.append(
-                {
-                    "disk": disk,
-                    "track": track,
-                    "title": title,
-                    "type": soup_filetype,
-                    "url": url,
-                }
+                disk = (
+                    cd[-1].text.strip()
+                    if cd[-1].text.strip() == ""
+                    else f"CD{cd[-1].text.strip()} "
+                )
+                track = id[0].text[:-1].strip()
+                title = key.text.strip()
+                url = f"https://downloads.khinsider.com{key['href']}"
+
+                soup_songs.append(
+                    {
+                        "disk": disk,
+                        "track": track,
+                        "title": title,
+                        "type": soup_filetype,
+                        "url": url,
+                    }
+                )
+
+            urls = [x["url"] for x in soup_songs]
+            urls_chunked = self.chunks(urls, self.threads * 2)
+            jobs = []
+            download_links_matx = self.manager.list()
+            for i, s in enumerate(urls_chunked):
+                j = multiprocessing.Process(
+                    target=self.song_scraper,
+                    args=(s, soup_filetype, download_links_matx),
+                )
+                jobs.append(j)
+                j.start()
+            for j in jobs:
+                j.join()
+
+            for q, i in enumerate(soup_songs):
+                for j in download_links_matx:
+                    if j[0] == i["url"]:
+                        soup_songs[q]["download"] = j[1]
+            end: float = time.perf_counter()
+            sys.stdout.write(
+                f" [{round(end - start, 2)}s]\n"
+            ) if not self.quiet else self.do_nothing()
+            sys.stdout.flush() if not self.quiet else self.do_nothing()
+
+            # Downloading Album Arts
+            print(
+                f"{self.log}Preparing Download Folder"
+            ) if not self.quiet else self.do_nothing()
+            os.mkdir(op.join(self.dir, scrap["fulltitle"])) if not op.isdir(
+                op.join(self.dir, scrap["fulltitle"])
+            ) else self.do_nothing()
+            jobs = []
+            dl_count = self.manager.list()
+            for i, url in enumerate(scrap["albumart"]):
+                j = multiprocessing.Process(
+                    target=self.downloader,
+                    args=(
+                        url,
+                        op.join(self.dir, scrap["fulltitle"]),
+                        f"cover_{i}",
+                        op.splitext(url)[-1].replace(".", ""),
+                        dl_count,
+                    ),
+                )
+                jobs.append(j)
+                j.start()
+
+            art_bar = tqdm(
+                enumerate(scrap["albumart"]),
+                disable=False if not self.quiet else True,
+                leave=True,
+                bar_format="{desc} {percentage:3.0f}%|{bar}| {n_fmt}/{total_fmt} [{elapsed} | {rate_fmt}{postfix}]",
+                total=len(scrap["albumart"]),
+                desc=f"{self.log}Downloading Covers",
             )
 
-        urls = [x["url"] for x in soup_songs]
-        urls_chunked = self.chunks(urls, self.threads * 2)
-        jobs = []
-        download_links_matx = self.manager.list()
-        for i, s in enumerate(urls_chunked):
-            j = multiprocessing.Process(
-                target=self.song_scraper,
-                args=(s, soup_filetype, download_links_matx),
+            while len(dl_count) < len(scrap["albumart"]):
+                start_value = len(dl_count)
+                time.sleep(0.5)
+                end_value = len(dl_count)
+                if end_value != start_value:
+                    art_bar.update()
+            del dl_count
+            if art_bar.n < len(scrap["albumart"]):
+                art_bar.update(len(scrap["albumart"]) - art_bar.n)
+            art_bar.close()
+
+            # Downloading Songs
+            song_chunks = self.chunks(soup_songs, self.threads)
+            dl_count = self.manager.list()
+            jobs = []
+            for i in song_chunks:
+                j = multiprocessing.Process(
+                    target=self.parallel_song_dl,
+                    args=(i, op.join(self.dir, scrap["fulltitle"]), dl_count),
+                )
+                jobs.append(j)
+                j.start()
+
+            song_bar = tqdm(
+                enumerate(soup_songs),
+                disable=False if not self.quiet else True,
+                leave=True,
+                bar_format="{desc} {percentage:3.0f}%|{bar}| {n_fmt}/{total_fmt} [{elapsed} | {rate_fmt}{postfix}]",
+                total=len(soup_songs),
+                desc=f"{self.log}Downloading Songs",
             )
-            jobs.append(j)
-            j.start()
-        for j in jobs:
-            j.join()
 
-        for q, i in enumerate(soup_songs):
-            for j in download_links_matx:
-                if j[0] == i["url"]:
-                    soup_songs[q]["download"] = j[1]
-        end: float = time.perf_counter()
-        sys.stdout.write(
-            f" [{round(end - start, 2)}s]\n"
-        ) if not self.quiet else self.do_nothing()
-        sys.stdout.flush() if not self.quiet else self.do_nothing()
+            while len(dl_count) < len(soup_songs):
+                start_value = len(dl_count)
+                time.sleep(0.5)
+                end_value = len(dl_count)
+                if end_value != start_value:
+                    song_bar.update()
+            del dl_count
+            if song_bar.n < len(soup_songs):
+                song_bar.update(len(soup_songs) - song_bar.n)
+            song_bar.close()
 
-        # Downloading Album Arts
-        print(
-            f"{self.log}Preparing Download Folder"
-        ) if not self.quiet else self.do_nothing()
-        os.mkdir(op.join(self.dir, scrap["fulltitle"])) if not op.isdir(
-            op.join(self.dir, scrap["fulltitle"])
-        ) else self.do_nothing()
-        jobs = []
-        dl_count = self.manager.list()
-        for i, url in enumerate(scrap["albumart"]):
-            j = multiprocessing.Process(
-                target=self.downloader,
-                args=(
-                    url,
-                    op.join(self.dir, scrap["fulltitle"]),
-                    f"cover_{i}",
-                    op.splitext(url)[-1].replace(".", ""),
-                    dl_count,
-                ),
-            )
-            jobs.append(j)
-            j.start()
-
-        art_bar = tqdm(
-            enumerate(scrap["albumart"]),
-            disable=False if not self.quiet else True,
-            leave=True,
-            bar_format="{desc} {percentage:3.0f}%|{bar}| {n_fmt}/{total_fmt} [{elapsed} | {rate_fmt}{postfix}]",
-            total=len(scrap["albumart"]),
-            desc=f"{self.log}Downloading Covers",
-        )
-
-        while len(dl_count) < len(scrap["albumart"]):
-            start_value = len(dl_count)
-            time.sleep(0.5)
-            end_value = len(dl_count)
-            if end_value != start_value:
-                art_bar.update()
-        del dl_count
-        if art_bar.n < len(scrap["albumart"]):
-            art_bar.update(len(scrap["albumart"]) - art_bar.n)
-        art_bar.close()
-
-        # Downloading Songs
-        song_chunks = self.chunks(soup_songs, self.threads)
-        dl_count = self.manager.list()
-        jobs = []
-        for i in song_chunks:
-            j = multiprocessing.Process(
-                target=self.parallel_song_dl,
-                args=(i, op.join(self.dir, scrap["fulltitle"]), dl_count),
-            )
-            jobs.append(j)
-            j.start()
-
-        song_bar = tqdm(
-            enumerate(soup_songs),
-            disable=False if not self.quiet else True,
-            leave=True,
-            bar_format="{desc} {percentage:3.0f}%|{bar}| {n_fmt}/{total_fmt} [{elapsed} | {rate_fmt}{postfix}]",
-            total=len(soup_songs),
-            desc=f"{self.log}Downloading Songs",
-        )
-
-        while len(dl_count) < len(soup_songs):
-            start_value = len(dl_count)
-            time.sleep(0.5)
-            end_value = len(dl_count)
-            if end_value != start_value:
-                song_bar.update()
-        del dl_count
-        if song_bar.n < len(soup_songs):
-            song_bar.update(len(soup_songs) - song_bar.n)
-        song_bar.close()
-
-        print(f"{self.final}Album Download Complete")
+            print(f"{self.final}Album Download Complete")
+            print(
+                f"{self.log}Job #{m:02} Finished"
+            ) if self.type != "url" and not self.quiet else self.do_nothing()
 
 
 if __name__ == "__main__":
     try:
         args = arg_parser()
         dl = GhostDL(
-            url=args.url,
+            main=args.INPUT,
             dir=args.output,
             default=args.default,
             quiet=args.quiet,
