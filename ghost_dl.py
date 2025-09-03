@@ -30,12 +30,12 @@ def arg_parser() -> argparse.Namespace:
 
     help_args = parser.add_argument_group(title="Help")
     help_args.add_argument("-h", "--help", action="help", help="Show a Help Message")
-    help_args.add_argument(
-        "-hh",
-        "--extra-help",
-        action="store_true",
-        help="Show a Help Message with Extra Information",
-    )
+    # help_args.add_argument(
+    #     "-hh",
+    #     "--extra-help",
+    #     action="store_true",
+    #     help="Show a Help Message with Extra Information",
+    # )
 
     optional = parser.add_argument_group(title="Optional")
     optional.add_argument(
