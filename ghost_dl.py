@@ -270,7 +270,7 @@ class GhostDL:
 
         match self.type:
             case "url":
-                main = list(self.main)
+                main = [self.main]
             case "batch":
                 main = self.batch_prepare(self.main)
         for m, job in enumerate(main):
