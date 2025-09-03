@@ -34,7 +34,7 @@ build() {
   pip install -r requirements.txt
   pip install nuitka
   if ! ls build; then mkdir build; fi
-  python -m nuitka --onefile --follow-imports --main=ghost-dl.py --output-dir=build
+  python -m nuitka --onefile --follow-imports --main=ghost_dl.py --output-dir=build --output-filename=ghost-dl
   deactivate
   rm -rf venv
   rm -rf build/ghost-dl.build build/ghost-dl.dist build/ghost-dl.onefile-build

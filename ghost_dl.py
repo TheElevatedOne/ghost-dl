@@ -5,9 +5,7 @@ import os
 import gc
 import sys
 import time
-import logging
 import argparse
-import tempfile
 import multiprocessing
 
 import os.path as op
@@ -117,6 +115,8 @@ class GhostDL:
         self.headers: dict = {
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/139.0.0.0 Safari/537.36"
         }
+
+        self.scraper()
 
     def filetype_input(self, type_list: list[str]) -> None:
         """Input Checking Loop"""
@@ -410,11 +410,12 @@ if __name__ == "__main__":
             verbose=args.verbose,
             threads=args.threads,
         )
-        dl.scraper()
     except KeyboardInterrupt:
         print()
         print("\033[38;2;229;80;26m[INTERRUPT]\033[0m Process Stopped")
         sys.exit(1)
     except Exception as e:
-        print(type(e).__name__)
+        with open("./test.log", "w") as f:
+            f.write(str(e))
+        f.close()
     print()

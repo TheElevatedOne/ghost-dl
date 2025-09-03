@@ -32,16 +32,19 @@ jobs:
         uses: Nuitka/Nuitka-Action@main
         with:
           nuitka-version: main
-          script-name: ghost-dl.py
+          script-name: ghost_dl.py
           mode: onefile
 
         # Both `${{ !contains('windows',matrix.os) }}` and `contains('windows',matrix.os) == false` didn't work, so just working around it
       - if: matrix.os == 'macos-latest'
         name: Rename Binary & Delete Build Directories (MacOS)
-        run: mv build/ghost-dl.bin build/ghost-dl && ls build/ && rm -r build/*.build build/*.dist build/*.onefile-build
+        run: mv build/ghost_dl.bin build/ghost-dl && ls build/ && rm -r build/*.build build/*.dist build/*.onefile-build
       - if: matrix.os == 'ubuntu-latest'
         name: Rename Binary & Delete Build Directories (Linux)
-        run: mv build/ghost-dl.bin build/ghost-dl && ls build/ && rm -r build/*.build build/*.dist build/*.onefile-build
+        run: mv build/ghost_dl.bin build/ghost-dl && ls build/ && rm -r build/*.build build/*.dist build/*.onefile-build
+      - if: matrix.os == 'windows-latest'
+        name: Rename Binary (Windows)
+        run: mv build/ghost_dl.exe build/ghost-dl.exe     
 
       - if: matrix.os == 'macos-latest'
         name: Upload Artifacts (MacOS)

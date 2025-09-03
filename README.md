@@ -34,6 +34,12 @@ options:
 - Quiet - Supresses unneeded logging meassages
 - Verbose - Logs more messages
 
+### Exceptions and Errors
+
+Most errors are being caught, other than errors from multiprocessing, as after trying multiple solutions to catch exceptions in multiple processes nothing worked.
+
+If someone more knowledgeable than me knows how to fix this, either create an Enhancement Issue or Create a Pull Request.
+
 # Development Setup
 
 ## Linux
