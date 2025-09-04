@@ -30,6 +30,7 @@ def arg_parser() -> argparse.Namespace:
 
     help_args = parser.add_argument_group(title="Help")
     help_args.add_argument("-h", "--help", action="help", help="Show a Help Message")
+    help_args.add_argument("--version", action="store_true", help="Show Version")
     # help_args.add_argument(
     #     "-hh",
     #     "--extra-help",
@@ -463,6 +464,9 @@ class GhostDL:
 
 if __name__ == "__main__":
     try:
+        if len(sys.argv) == 2 and sys.argv[1] == "--version":
+            print("v1.1.3")
+            sys.exit(0)
         args = arg_parser()
         dl = GhostDL(
             main=args.INPUT,
