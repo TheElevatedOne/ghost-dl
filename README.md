@@ -26,6 +26,7 @@ Positional:
 
 Help:
   -h, --help            Show a Help Message
+  --version             Show Version
 
 Optional:
   -o, --output OUTPUT   Output directory (Current if not set)
