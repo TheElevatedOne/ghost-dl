@@ -166,7 +166,9 @@ class GhostDL:
                 requests.get(url, headers=self.headers).content, "html.parser"
             )
             song_links: list[str] = [
-                s["href"] for s in song_soup.find_all("a") if "vgmsite" in str(s)
+                s["href"]
+                for s in song_soup.find_all("a")
+                if "vgmsite" in str(s) or "vgmtreasurechest" in str(s)
             ]
             song_link = [s for s in song_links if filetype in s][0]
             shared_list.append([url, song_link])
