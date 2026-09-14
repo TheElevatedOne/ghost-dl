@@ -1,0 +1,23 @@
+# Maintainer: Adam 'TheElevatedOne' Mladý <admin@elevated.ovh> -> https://github.com/TheElevatedOne
+
+pkgname=ghost-dl
+pkgver=2.1.0
+pkgrel=1
+pkgdesc="Kingdom Hearts Insider Game OST Archive Downloader CLI/TUI"
+arch=('x86_64' 'aarch64')
+url="https://github.com/TheElevatedOne/ghost-dl"
+license=('GPL3')
+depends=('glibc' 'curl' 'ncurses')
+makedepends=('gcc' 'make')
+provides=('ghost-dl')
+conflicts=('ghost-dl-git' 'ghost-dl-bin')
+source=()
+sha256sums=()
+
+build() {
+  make -C "$startdir/../.." PREFIX=/usr
+}
+
+package() {
+  make -C "$startdir/../.." DESTDIR="$pkgdir" PREFIX=/usr install
+}

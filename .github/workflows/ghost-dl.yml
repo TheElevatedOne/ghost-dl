@@ -3,91 +3,92 @@ on:
   push:
     tags:
       - '*'
+  pull_request:
 jobs:
-  build:
-    strategy:
-      matrix:
-        os: [macos-latest, ubuntu-latest, windows-latest]
-
-    runs-on: ${{ matrix.os }}
-
+  test:
+    runs-on: ubuntu-latest
     steps:
       - name: Check-out repository
         uses: actions/checkout@v4
+      - name: Install Dependencies
+        run: sudo apt-get update && sudo apt-get install -y build-essential libcurl4-openssl-dev libncurses-dev
+      - name: Test
+        run: make test
+      - name: Build
+        run: make
 
-      - name: Setup Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.13' # Version range or exact version of a Python version to use, using SemVer's version range syntax
-          architecture: 'x64' # optional x64 or x86. Defaults to x64 if not specified
-          cache: 'pip'
-          cache-dependency-path: |
-            **/requirements*.txt
-
+  packages:
+    if: startsWith(github.ref, 'refs/tags/')
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check-out repository
+        uses: actions/checkout@v4
       - name: Install Dependencies
         run: |
-          pip install -r requirements.txt
-
-      - name: Build Executable
-        uses: Nuitka/Nuitka-Action@main
-        with:
-          nuitka-version: main
-          script-name: ghost_dl.py
-          mode: onefile
-
-        # Both `${{ !contains('windows',matrix.os) }}` and `contains('windows',matrix.os) == false` didn't work, so just working around it
-      - if: matrix.os == 'macos-latest'
-        name: Rename Binary & Delete Build Directories (MacOS)
-        run: mv build/ghost_dl.bin build/ghost-dl && ls build/ && rm -r build/*.build build/*.dist build/*.onefile-build
-      - if: matrix.os == 'ubuntu-latest'
-        name: Rename Binary & Delete Build Directories (Linux)
-        run: mv build/ghost_dl.bin build/ghost-dl && ls build/ && rm -r build/*.build build/*.dist build/*.onefile-build
-      - if: matrix.os == 'windows-latest'
-        name: Rename Binary (Windows)
-        run: mv build/ghost_dl.exe build/ghost-dl.exe
-
-      - if: matrix.os == 'macos-latest'
-        name: Upload Artifacts (MacOS)
+          sudo apt-get update
+          sudo apt-get install -y build-essential libcurl4-openssl-dev libncurses-dev \
+            rpm fakeroot zstd libarchive-tools
+      - name: Build packages
+        run: make dist
+      - name: Upload Linux artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: ghost-dl_${{ matrix.os }}_${{ github.ref_name }}
-          path: build/ghost-dl
-          include-hidden-files: true
-      - if: matrix.os == 'ubuntu-latest'
-        name: Upload Artifacts (Linux)
+          name: ghost-dl-linux
+          path: |
+            dist/*.deb
+            dist/*.rpm
+            dist/*.pkg.tar.zst
+            dist/*.tar.gz
+
+  macos:
+    if: startsWith(github.ref, 'refs/tags/')
+    needs: test
+    runs-on: macos-latest
+    steps:
+      - name: Check-out repository
+        uses: actions/checkout@v4
+      - name: Install Dependencies
+        run: brew install curl ncurses
+      - name: Build
+        run: make
+      - name: Package tarball
+        run: |
+          mkdir -p dist/ghost-dl
+          cp ghost-dl LICENSE README.md dist/ghost-dl/
+          tar -czvf ghost-dl-macos-universal.tar.gz -C dist ghost-dl
+          mv ghost-dl-macos-universal.tar.gz dist/
+      - name: Upload macOS artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: ghost-dl_${{ matrix.os }}_${{ github.ref_name }}
-          path: build/ghost-dl
-          include-hidden-files: true
-      - if: matrix.os == 'windows-latest'
-        name: Upload Artifacts (Windows)
-        uses: actions/upload-artifact@v4
+          name: ghost-dl-macos
+          path: dist/ghost-dl-macos-universal.tar.gz
+
+  release:
+    if: startsWith(github.ref, 'refs/tags/')
+    needs: [packages, macos]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Check-out repository
+        uses: actions/checkout@v4
+      - name: Download artifacts
+        uses: actions/download-artifact@v4
         with:
-          name: ghost-dl_${{ matrix.os }}_${{ github.ref_name }}
-          path: build/ghost-dl.exe
-          include-hidden-files: true
-
-      - name: Download LICENSE from Repo
-        run: curl https://raw.githubusercontent.com/TheElevatedOne/ghost-dl/refs/heads/main/LICENSE -o build/LICENSE
-
-      - if: matrix.os == 'macos-latest'
-        name: Create Tar Archives (MacOS)
-        run: tar -czvf ghost-dl_${{ matrix.os }}.tar.gz -C build .
-      - if: matrix.os == 'ubuntu-latest'
-        name: Create Tar Archives (Linux)
-        run: tar -czvf ghost-dl_${{ matrix.os }}.tar.gz -C build .
-      - if: matrix.os == 'windows-latest'
-        name: Create Tar Archives (Windows)
-        run: tar -czvf ghost-dl_${{ matrix.os }}.tar.gz -C build .
-
-      - name: Create Github Release
+          path: artifacts
+      - name: Flatten artifacts
+        run: |
+          mkdir -p dist
+          find artifacts -type f -exec cp {} dist/ \;
+          ls -lh dist
+      - name: Create GitHub Release
         uses: ncipollo/release-action@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          artifacts: ghost-dl_${{ matrix.os }}.tar.gz
-          replacesArtifacts: false
-          name: ${{ github.ref_name }} - ghost_dl
+          artifacts: dist/*
+          replacesArtifacts: true
+          name: ${{ github.ref_name }} - ghost-dl
           bodyFile: "RELEASE_BODY.md"
           allowUpdates: true

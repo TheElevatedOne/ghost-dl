@@ -1,0 +1,15 @@
+Package: ghost-dl
+Version: @@VERSION@@-1
+Section: sound
+Priority: optional
+Maintainer: Adam Mladý <admin@elevated.ovh>
+Homepage: https://github.com/TheElevatedOne/ghost-dl
+Architecture: @@ARCH@@
+Installed-Size: @@SIZE@@
+Depends: libc6 (>= 2.34), libcurl4 | libcurl4t64, libncursesw6
+Description: KHInsider game OST downloader
+ ghost-dl downloads albums from the Kingdom Hearts Insider game
+ soundtrack archive (https://downloads.khinsider.com).
+ .
+ It provides a command-line interface and an ncurses search TUI,
+ format selection, batch files, and parallel downloads.

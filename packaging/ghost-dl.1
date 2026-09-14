@@ -1,0 +1,108 @@
+.TH GHOST-DL 1 "2026-09-14" "ghost-dl 2.1.0" "User Commands"
+.SH NAME
+ghost-dl \- download game OSTs from KHInsider
+.SH SYNOPSIS
+.B ghost-dl
+[\fIOPTIONS\fR] [\fIINPUT\fR...]
+.SH DESCRIPTION
+.B ghost-dl
+downloads albums from the Kingdom Hearts Insider game soundtrack archive
+(https://downloads.khinsider.com).
+.PP
+\fIINPUT\fR may be an album URL, an album slug, or a batch file of URLs/slugs
+(one per line). With no \fIINPUT\fR, the search TUI is opened.
+.SH OPTIONS
+.SS General
+.TP
+.BR \-h ", " \-\-help
+Show help and exit.
+.TP
+.BR \-V ", " \-\-version
+Show version and exit.
+.TP
+.B \-\-tui
+Open the search TUI.
+.TP
+.BR \-s ", " \-\-search " " \fIQUERY\fR
+Search albums and print results.
+.TP
+.BR \-i ", " \-\-info
+Show album info without downloading.
+.TP
+.BR \-n ", " \-\-dry\-run
+Resolve files but do not download.
+.SS Download
+.TP
+.BR \-o ", " \-\-output " " \fIDIR\fR
+Output directory (default: current directory).
+.TP
+.BR \-t ", " \-\-threads " " \fIN\fR
+Parallel workers (default: CPU/2, max 8).
+.TP
+.BR \-f ", " \-\-format " " \fIFMT\fR
+Audio format, or a comma-separated preference list (for example
+.BR flac,mp3 ).
+.TP
+.BR \-d ", " \-\-default ", " \-y ", " \-\-yes
+Pick the highest quality format without prompting.
+.TP
+.B \-\-no\-cover
+Skip album art.
+.TP
+.B \-\-cover\-only
+Download only album art.
+.TP
+.B \-\-force
+Overwrite existing files.
+.SS Logging
+.TP
+.BR \-q ", " \-\-quiet
+Suppress progress and log messages.
+.TP
+.BR \-v ", " \-\-verbose
+Show extra log messages.
+.SH TUI KEYS
+.TP
+type, Enter
+Search.
+.TP
+Esc
+Return to the search bar.
+.TP
+Up/Down, j/k
+Move selection.
+.TP
+Enter / i
+Load album info.
+.TP
+f
+Cycle audio format.
+.TP
+d
+Download selected album.
+.TP
+/
+Focus search.
+.TP
+q
+Quit.
+.SH EXAMPLES
+.EX
+ghost-dl
+ghost-dl \-\-search celeste
+ghost-dl \-d \-f flac minecraft
+ghost-dl \-o ~/Music https://downloads.khinsider.com/game-soundtracks/album/minecraft
+ghost-dl \-\-info persona-5
+ghost-dl \-d urls.txt
+.EE
+.SH FILES
+Each album is written to a directory named
+.IR "YEAR \- Title (Type)"
+under the output directory.
+.SH AUTHOR
+Adam Mladý <admin@elevated.ovh>
+.SH COPYRIGHT
+Copyright \(co 2025\-2026 Adam Mladý.
+License GPLv3+: GNU GPL version 3 or later.
+.SH SEE ALSO
+https://github.com/TheElevatedOne/ghost-dl
