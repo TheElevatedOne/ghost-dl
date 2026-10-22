@@ -500,96 +500,121 @@ int parse_search_page(const char *html, const char *final_url, struct SearchResu
     return 0;
 }
 
-static int href_is_audio(const char *href, const char *want_ext) {
-    if (!href)
-        return 0;
-    if (strncmp(href, "http://", 7) != 0 && strncmp(href, "https://", 8) != 0)
-        return 0;
+/* Extension of an audio URL ("flac", "mp3", ...) or NULL if it is not audio. */
+static char *audio_ext(const char *href) {
+    if (!href || !looks_like_url(href))
+        return NULL;
     char *q = xstrdup(href);
-    char *hash = strpbrk(q, "?#");
-    if (hash)
-        *hash = 0;
-    int ok = 0;
-    if (want_ext && *want_ext) {
-        char suf[16];
-        snprintf(suf, sizeof(suf), ".%s", want_ext);
-        ok = str_ends_ci(q, suf);
-    } else {
-        static const char *exts[] = {
-            ".flac", ".wav", ".aiff", ".alac", ".ape", ".ogg", ".opus",
-            ".aac", ".m4a", ".wma", ".mp3", NULL
-        };
-        for (int i = 0; exts[i]; i++) {
-            if (str_ends_ci(q, exts[i])) {
-                ok = 1;
-                break;
-            }
+    char *cut = strpbrk(q, "?#");
+    if (cut)
+        *cut = 0;
+    const char *dot = strrchr(q, '.');
+    const char *slash = strrchr(q, '/');
+    char *ext = NULL;
+    if (dot && (!slash || dot > slash) && dot[1]) {
+        ext = str_lower_dup(dot + 1);
+        if (format_rank(ext) >= 500) {
+            free(ext);
+            ext = NULL;
         }
     }
     free(q);
-    return ok;
+    return ext;
 }
 
-int parse_song_page(const char *html, const char *want_ext, char **download_url) {
+/*
+ * Find the direct download link on a song page. WANT_EXT is preferred; if
+ * the song is not available in that format, the best available one is
+ * returned instead. *EXT_OUT receives the extension of the chosen link.
+ */
+int parse_song_page(const char *html, const char *want_ext, char **download_url,
+                    char **ext_out) {
     *download_url = NULL;
+    if (ext_out)
+        *ext_out = NULL;
     if (!html)
         return -1;
 
-    /* Prefer songDownloadLink anchors */
+    char *best = NULL, *best_ext = NULL;
+    int best_score = 1 << 30;
     const char *p = html;
-    char *fallback = NULL;
     while ((p = strstr(p, "<a "))) {
         const char *end = strchr(p, '>');
         if (!end)
             break;
-        char *href = first_href(p);
-        if (href && href_is_audio(href, want_ext)) {
+        char *open = xstrndup(p, (size_t)(end - p));
+        char *href = first_href(open);
+        free(open);
+        char *ext = audio_ext(href);
+        if (ext) {
             /* songDownloadLink is the canonical "Click here to download as FMT" */
             const char *close = strstr(p, "</a>");
             int preferred = 0;
             if (close) {
                 char *inner = xstrndup(p, (size_t)(close - p));
-                if (strstr(inner, "songDownloadLink") || strstr(inner, "Click here to download"))
-                    preferred = 1;
+                preferred = strstr(inner, "songDownloadLink") ||
+                            strstr(inner, "Click here to download");
                 free(inner);
             }
-            if (preferred) {
-                *download_url = href;
-                free(fallback);
-                return 0;
+            int score = format_rank(ext) * 2 + (preferred ? 0 : 1);
+            if (want_ext && *want_ext && str_eq_ci(ext, want_ext))
+                score -= 100000;
+            if (score < best_score) {
+                free(best);
+                free(best_ext);
+                best = href;
+                best_ext = ext;
+                best_score = score;
+                href = NULL;
+                ext = NULL;
             }
-            if (!fallback)
-                fallback = href;
-            else
-                free(href);
-        } else {
-            free(href);
         }
+        free(ext);
+        free(href);
         p = end + 1;
     }
-    if (fallback) {
-        *download_url = fallback;
-        return 0;
-    }
-    return -1;
+    if (!best)
+        return -1;
+    *download_url = best;
+    if (ext_out)
+        *ext_out = best_ext;
+    else
+        free(best_ext);
+    return 0;
+}
+
+static void log_fetch_failure(const char *what, long status) {
+    if (status == 404)
+        log_error("%s: not found (HTTP 404)", what);
+    else if (status == 403 || status == 429)
+        log_error("%s: blocked by the server (HTTP %ld). "
+                  "KHInsider may be rate limiting you; try again later.", what, status);
+    else if (status >= 400)
+        log_error("%s: HTTP %ld", what, status);
+    else
+        log_error("%s: network error (run with -v for details)", what);
 }
 
 int fetch_album(const char *input, struct Album *out) {
     memset(out, 0, sizeof(*out));
     char *slug = slug_from_input(input);
-    if (!slug) {
+    if (!slug || !*slug) {
         log_error("Not a KHInsider album URL or slug: %s", input);
+        free(slug);
         return -1;
     }
     char url[1024];
     snprintf(url, sizeof(url), "%s/game-soundtracks/album/%s", GHOST_BASE_URL, slug);
-    log_info("Loading webpage");
+    log_info("Loading album page (%s)", slug);
     char *body = NULL, *final_url = NULL;
     size_t len = 0;
+    long status = 0;
     int64_t t0 = monotonic_ms();
-    int rc = http_get(url, &body, &len, &final_url);
+    int rc = http_get(url, NULL, &body, &len, &final_url, &status);
     if (rc != 0 || !body) {
-        log_error("Failed to fetch album page (%s)", slug);
+        char what[512];
+        snprintf(what, sizeof(what), "Failed to fetch album \"%s\"", slug);
+        log_fetch_failure(what, status);
         free(slug);
         free(body);
         free(final_url);
@@ -630,8 +655,9 @@ int fetch_search(const char *query, struct SearchResults *out) {
     free(enc);
     char *body = NULL, *final_url = NULL;
     size_t len = 0;
-    if (http_get(url, &body, &len, &final_url) != 0 || !body) {
-        log_error("Search request failed");
+    long status = 0;
+    if (http_get(url, NULL, &body, &len, &final_url, &status) != 0 || !body) {
+        log_fetch_failure("Search request failed", status);
         free(body);
         free(final_url);
         return -1;
@@ -642,23 +668,26 @@ int fetch_search(const char *query, struct SearchResults *out) {
     return rc;
 }
 
-int resolve_track_url(struct Track *tr, const char *fmt) {
+int resolve_track_url(struct Track *tr, const char *fmt, const char *referer) {
     if (!tr || !tr->page_url)
         return -1;
     char *body = NULL;
-    if (http_get(tr->page_url, &body, NULL, NULL) != 0 || !body) {
+    if (http_get(tr->page_url, referer, &body, NULL, NULL, NULL) != 0 || !body) {
         free(body);
         return -1;
     }
-    char *url = NULL;
-    int rc = parse_song_page(body, fmt, &url);
+    char *url = NULL, *ext = NULL;
+    int rc = parse_song_page(body, fmt, &url, &ext);
     free(body);
-    if (rc != 0 || !url)
+    if (rc != 0 || !url) {
+        free(url);
+        free(ext);
         return -1;
+    }
     free(tr->download_url);
     tr->download_url = url;
     free(tr->ext);
-    tr->ext = xstrdup(fmt ? fmt : "mp3");
+    tr->ext = ext ? ext : xstrdup(fmt ? fmt : "mp3");
     return 0;
 }
 
@@ -667,7 +696,9 @@ struct ResolveState {
     const char *fmt;
     volatile int *abort_flag;
     int next;
+    int done;
     int failed;
+    int show;
     pthread_mutex_t mu;
 };
 
@@ -683,18 +714,22 @@ static void *resolve_worker(void *arg) {
             return NULL;
         int tries = 0;
         int ok = 0;
-        while (tries < 3) {
-            if (resolve_track_url(&st->al->tracks[i], st->fmt) == 0) {
+        while (tries < 2 && !(st->abort_flag && *st->abort_flag)) {
+            if (resolve_track_url(&st->al->tracks[i], st->fmt, st->al->url) == 0) {
                 ok = 1;
                 break;
             }
             tries++;
         }
-        if (!ok) {
-            pthread_mutex_lock(&st->mu);
+        pthread_mutex_lock(&st->mu);
+        if (!ok)
             st->failed++;
-            pthread_mutex_unlock(&st->mu);
+        st->done++;
+        if (st->show) {
+            fprintf(stderr, "\r\033[2K  Resolving track URLs %d/%d", st->done, st->al->ntracks);
+            fflush(stderr);
         }
+        pthread_mutex_unlock(&st->mu);
     }
 }
 
@@ -711,6 +746,7 @@ int resolve_album_tracks(struct Album *al, const char *fmt, int threads, volatil
     st.al = al;
     st.fmt = fmt;
     st.abort_flag = abort_flag;
+    st.show = !ghost_log_quiet() && ghost_is_tty(stderr);
     pthread_mutex_init(&st.mu, NULL);
 
     pthread_t *th = xcalloc((size_t)threads, sizeof(pthread_t));
@@ -724,12 +760,24 @@ int resolve_album_tracks(struct Album *al, const char *fmt, int threads, volatil
         pthread_join(th[i], NULL);
     free(th);
     pthread_mutex_destroy(&st.mu);
+    if (st.show && st.done > 0)
+        fputs("\r\033[2K", stderr);
 
     int missing = 0;
     for (int i = 0; i < al->ntracks; i++) {
         if (!al->tracks[i].download_url)
             missing++;
     }
+    if (abort_flag && *abort_flag)
+        return -1;
+    int other = 0;
+    for (int i = 0; i < al->ntracks; i++) {
+        if (al->tracks[i].download_url && fmt && !str_eq_ci(al->tracks[i].ext, fmt))
+            other++;
+    }
+    if (other)
+        log_info("%d track%s not available as %s; using the best other format",
+                 other, other == 1 ? " is" : "s are", fmt);
     if (missing)
         log_error("Failed to resolve %d / %d track download URLs", missing, al->ntracks);
     return missing == al->ntracks ? -1 : 0;

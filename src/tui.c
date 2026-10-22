@@ -6,6 +6,8 @@
 #include <stdlib.h>
 #include <string.h>
 #include <ctype.h>
+#include <termios.h>
+#include <unistd.h>
 
 enum TuiFocus { FOCUS_SEARCH, FOCUS_LIST };
 
@@ -34,6 +36,18 @@ struct Tui {
 
 static void set_status(struct Tui *t, const char *s) {
     snprintf(t->status, sizeof(t->status), "%s", s ? s : "");
+}
+
+/* Repaint just the status line, for messages shown while blocking on I/O. */
+static void paint_status(struct Tui *t) {
+    int y = LINES - 2;
+    attron(COLOR_PAIR(1));
+    mvhline(y, 0, ACS_HLINE, COLS);
+    attroff(COLOR_PAIR(1));
+    attron(COLOR_PAIR(4));
+    mvaddnstr(y, 2, t->status, COLS - 4);
+    attroff(COLOR_PAIR(4));
+    refresh();
 }
 
 static void draw_box_title(int y, int x, int h, int w, const char *title) {
@@ -88,8 +102,7 @@ static void do_search(struct Tui *t) {
     }
     set_status(t, "Searching...");
     /* paint status immediately */
-    mvaddnstr(LINES - 2, 2, t->status, COLS - 4);
-    refresh();
+    paint_status(t);
     int q = ghost_log_quiet(), v = ghost_log_verbose();
     ghost_log_init(1, 0);
     int frc = fetch_search(t->query, &t->results);
@@ -113,8 +126,7 @@ static void do_lookup(struct Tui *t) {
         return;
     album_clear(t);
     set_status(t, "Loading album...");
-    mvaddnstr(LINES - 2, 2, t->status, COLS - 4);
-    refresh();
+    paint_status(t);
     struct SearchHit *h = &t->results.items[t->selected];
     int q = ghost_log_quiet(), v = ghost_log_verbose();
     ghost_log_init(1, 0);
@@ -131,8 +143,7 @@ static void do_lookup(struct Tui *t) {
     snprintf(t->fmt, sizeof(t->fmt), "%s", picked);
     if (termimg_supported() && t->album.ncovers > 0) {
         set_status(t, "Loading cover...");
-        mvaddnstr(LINES - 2, 2, t->status, COLS - 4);
-        refresh();
+        paint_status(t);
         const char *thumb = t->album.covers[0].thumb_url;
         const char *full = t->album.covers[0].url;
         int got = -1;
@@ -162,15 +173,27 @@ static int do_download(struct Tui *t) {
     o.format = t->fmt[0] ? t->fmt : t->opt->format;
     o.use_default = 1;
     o.tui = 0;
+    fprintf(stderr, "\n");
     int rc = download_album(&t->album, &o, t->abort_flag);
+    int cancelled = t->abort_flag && *t->abort_flag;
+    if (t->abort_flag)
+        *t->abort_flag = 0; /* Ctrl-C cancels the download, not the TUI */
     fprintf(stderr, "\nPress Enter to return to search...\n");
     fflush(stderr);
+    tcflush(STDIN_FILENO, TCIFLUSH); /* drop keys typed during the download */
+    clearerr(stdin);
     int c;
     while ((c = getchar()) != '\n' && c != EOF) {
     }
+    clearerr(stdin);
     reset_prog_mode();
+    clearok(curscr, TRUE);
     refresh();
-    if (rc == 0)
+    /* The album's track list may have been resolved/filtered; reload next time. */
+    album_clear(t);
+    if (cancelled)
+        set_status(t, "Download cancelled - run it again to resume");
+    else if (rc == 0)
         set_status(t, "Download complete");
     else
         set_status(t, "Download finished with errors");
@@ -225,11 +248,25 @@ static void draw(struct Tui *t) {
     /* header / search */
     draw_box_title(0, 0, 3, w, " ghost-dl search ");
     mvaddstr(1, 2, "Search: ");
-    attron(COLOR_PAIR(3) | A_BOLD);
-    mvaddnstr(1, 10, t->query, w - 14);
-    attroff(COLOR_PAIR(3) | A_BOLD);
-    if (t->focus == FOCUS_SEARCH) {
-        mvaddch(1, 10 + t->qlen, ACS_CKBOARD);
+    {
+        int room = w - 14;
+        const char *q = t->query;
+        int cols = 0;
+        for (const char *c = q; *c; c++)
+            if (((unsigned char)*c & 0xC0) != 0x80)
+                cols++;
+        /* show the tail of a long query */
+        while (cols > room && *q) {
+            q++;
+            while (((unsigned char)*q & 0xC0) == 0x80)
+                q++;
+            cols--;
+        }
+        attron(COLOR_PAIR(3) | A_BOLD);
+        mvaddstr(1, 10, q);
+        attroff(COLOR_PAIR(3) | A_BOLD);
+        if (t->focus == FOCUS_SEARCH)
+            mvaddch(1, 10 + cols, ACS_CKBOARD);
     }
 
     draw_box_title(list_y, list_x, list_h, list_w, " results ");
@@ -334,6 +371,11 @@ static void draw(struct Tui *t) {
         }
         for (int i = 0; i < t->album.ntracks && dy <= dmax; i++) {
             struct Track *tr = &t->album.tracks[i];
+            if (dy == dmax && i + 1 < t->album.ntracks) {
+                snprintf(line, sizeof(line), "... and %d more", t->album.ntracks - i);
+                put_trunc(dy++, dx, dw, line, COLOR_PAIR(4));
+                break;
+            }
             if (multi && tr->disc > 0)
                 snprintf(line, sizeof(line), "CD%d %02d. %s%s%s",
                          tr->disc, tr->number, tr->title ? tr->title : "",
@@ -345,9 +387,6 @@ static void draw(struct Tui *t) {
                          tr->duration ? "  " : "",
                          tr->duration ? tr->duration : "");
             put_trunc(dy++, dx, dw, line, COLOR_PAIR(3));
-        }
-        if (t->album.ntracks > (dmax - (detail_y + 8)) && dmax >= dy - 1) {
-            /* truncated */
         }
     } else if (t->results.count > 0) {
         put_trunc(dy + 1, dx, dw, "Press Enter to load album info.", COLOR_PAIR(4));
@@ -415,15 +454,23 @@ static void handle_key(struct Tui *t, int ch) {
             return;
         }
         if (ch == KEY_BACKSPACE || ch == 127 || ch == 8) {
+            /* drop a whole UTF-8 sequence */
+            while (t->qlen > 0 && ((unsigned char)t->query[t->qlen - 1] & 0xC0) == 0x80)
+                t->query[--t->qlen] = 0;
             if (t->qlen > 0)
                 t->query[--t->qlen] = 0;
+            return;
+        }
+        if (ch == 21) { /* Ctrl-U clears the query */
+            t->qlen = 0;
+            t->query[0] = 0;
             return;
         }
         if (ch == 'q' && t->qlen == 0) {
             t->running = 0;
             return;
         }
-        if (ch >= 32 && ch < 127 && t->qlen < (int)sizeof(t->query) - 1) {
+        if (ch >= 32 && ch < 256 && ch != 127 && t->qlen < (int)sizeof(t->query) - 1) {
             t->query[t->qlen++] = (char)ch;
             t->query[t->qlen] = 0;
         }
@@ -531,8 +578,12 @@ int tui_run(struct Options *opt, volatile int *abort_flag) {
         init_pair(6, COLOR_GREEN, -1);
     }
 
-    if (t.qlen > 0)
+    if (t.qlen > 0) {
+        draw(&t);
         do_search(&t);
+        if (t.results.count > 0)
+            t.focus = FOCUS_LIST;
+    }
 
     while (t.running && !(abort_flag && *abort_flag)) {
         draw(&t);

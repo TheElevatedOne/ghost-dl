@@ -95,7 +95,7 @@ int termimg_load_url(const char *url, struct TermImg *img) {
         return -1;
     char *body = NULL;
     size_t len = 0;
-    if (http_get(url, &body, &len, NULL) != 0 || !body || len < 16) {
+    if (http_get(url, NULL, &body, &len, NULL, NULL) != 0 || !body || len < 16) {
         free(body);
         return -1;
     }

@@ -11,6 +11,13 @@ static volatile int g_abort = 0;
 
 static void on_sigint(int sig) {
     (void)sig;
+    if (g_abort) {
+        /* Second Ctrl-C: stop immediately. */
+        static const char msg[] = "\033[?7h\033[?25h\nghost-dl: aborted\n";
+        ssize_t w = write(STDERR_FILENO, msg, sizeof(msg) - 1);
+        (void)w;
+        _exit(130);
+    }
     g_abort = 1;
 }
 
@@ -32,6 +39,7 @@ void print_help(void) {
         "  ghost-dl\n"
         "  ghost-dl --search celeste\n"
         "  ghost-dl -d -f flac minecraft\n"
+        "  ghost-dl -d --tracks 1-5,9 minecraft\n"
         "  ghost-dl -o ~/Music https://downloads.khinsider.com/game-soundtracks/album/minecraft\n"
         "  ghost-dl --info persona-5\n"
         "  ghost-dl -d urls.txt\n"
@@ -50,14 +58,20 @@ void print_help(void) {
         "  -f, --format FMT        Audio format, or comma-separated preference\n"
         "                          (e.g. flac,mp3). Default: highest available\n"
         "  -d, --default           Highest quality without prompting\n"
+        "  -T, --tracks LIST       Only download these tracks, by position as shown\n"
+        "                          by --info (e.g. 1-5,8,12-)\n"
+        "      --playlist          Write playlist.m3u8 into the album folder\n"
         "  -y, --yes               Same as --default\n"
         "      --no-cover          Skip album art\n"
         "      --cover-only        Download only album art\n"
-        "      --force             Overwrite existing files\n"
+        "      --force             Re-download files that already exist\n"
         "\n"
         "Logging:\n"
         "  -q, --quiet             Suppress progress and log messages\n"
         "  -v, --verbose           Extra log messages\n"
+        "\n"
+        "Interrupted downloads resume when the same command is run again.\n"
+        "Press Ctrl-C once to stop cleanly, twice to quit immediately.\n"
         "\n"
         "TUI keys:  type to search, Enter lookup, Esc search, d download, f format, q quit\n"
     );
@@ -80,6 +94,8 @@ static struct option long_opts[] = {
     {"no-cover", no_argument, NULL, 1001},
     {"cover-only", no_argument, NULL, 1002},
     {"force", no_argument, NULL, 1003},
+    {"tracks", required_argument, NULL, 'T'},
+    {"playlist", no_argument, NULL, 1004},
     {0, 0, 0, 0},
 };
 
@@ -89,7 +105,7 @@ int parse_args(int argc, char **argv, struct Options *opt) {
 
     opterr = 0;
     int c;
-    while ((c = getopt_long(argc, argv, ":hVo:t:f:dyqvs:in", long_opts, NULL)) != -1) {
+    while ((c = getopt_long(argc, argv, ":hVo:t:f:dyqvs:inT:", long_opts, NULL)) != -1) {
         switch (c) {
         case 'h':
             print_help();
@@ -102,14 +118,22 @@ int parse_args(int argc, char **argv, struct Options *opt) {
             opt->output = xstrdup(optarg);
             break;
         case 't': {
-            int n = atoi(optarg);
-            if (n < 1)
-                n = 1;
-            if (n > 32)
-                n = 32;
-            opt->threads = n;
+            char *end = NULL;
+            long n = strtol(optarg, &end, 10);
+            if (end == optarg || *end || n < 1 || n > 32) {
+                fprintf(stderr, "ghost-dl: --threads must be a number from 1 to 32\n");
+                return -1;
+            }
+            opt->threads = (int)n;
             break;
         }
+        case 'T':
+            free(opt->tracks);
+            opt->tracks = xstrdup(optarg);
+            break;
+        case 1004:
+            opt->playlist = 1;
+            break;
         case 'f':
             free(opt->format);
             opt->format = xstrdup(optarg);
@@ -147,14 +171,19 @@ int parse_args(int argc, char **argv, struct Options *opt) {
             opt->force = 1;
             break;
         case ':':
-            fprintf(stderr, "ghost-dl: option -%c requires an argument\n", optopt);
+            if (optopt)
+                fprintf(stderr, "ghost-dl: option -%c requires an argument\n", optopt);
+            else
+                fprintf(stderr, "ghost-dl: option %s requires an argument\n", argv[optind - 1]);
+            fprintf(stderr, "Try 'ghost-dl --help'.\n");
             return -1;
         case '?':
         default:
-            fprintf(stderr, "ghost-dl: unknown option");
             if (optopt)
-                fprintf(stderr, " -%c", optopt);
-            fprintf(stderr, "\nTry 'ghost-dl --help'.\n");
+                fprintf(stderr, "ghost-dl: unknown option -%c\n", optopt);
+            else
+                fprintf(stderr, "ghost-dl: unknown option %s\n", argv[optind - 1]);
+            fprintf(stderr, "Try 'ghost-dl --help'.\n");
             return -1;
         }
     }
@@ -277,13 +306,13 @@ int run_cli(struct Options *opt, volatile int *abort_flag) {
         if (abort_flag && *abort_flag)
             break;
         if (njobs > 1)
-            log_info("Job #%02d started", i);
+            log_info("Album %d/%d: %s", i + 1, njobs, jobs[i]);
         struct Album al;
         if (fetch_album(jobs[i], &al) != 0) {
             rc = GHOST_ERR_PARSE;
             continue;
         }
-        if (opt->info_only && !opt->dry_run) {
+        if (opt->info_only) {
             print_album_info(&al, stdout);
             album_free(&al);
             continue;
@@ -292,8 +321,6 @@ int run_cli(struct Options *opt, volatile int *abort_flag) {
         album_free(&al);
         if (drc != 0)
             rc = GHOST_ERR;
-        if (njobs > 1)
-            log_info("Job #%02d finished", i);
     }
     for (int i = 0; i < njobs; i++)
         free(jobs[i]);
@@ -306,6 +333,11 @@ int main(int argc, char **argv) {
     if (parse_args(argc, argv, &opt) != 0)
         return GHOST_ERR_USAGE;
 
+    if (opt.no_cover && opt.cover_only) {
+        fprintf(stderr, "ghost-dl: --no-cover and --cover-only cannot be used together\n");
+        options_free(&opt);
+        return GHOST_ERR_USAGE;
+    }
     if (opt.quiet && opt.verbose) {
         fprintf(stderr, "ghost-dl: --quiet and --verbose cannot be used together\n");
         options_free(&opt);
@@ -318,6 +350,8 @@ int main(int argc, char **argv) {
         options_free(&opt);
         return GHOST_ERR_NETWORK;
     }
+
+    http_set_abort_flag(&g_abort);
 
     struct sigaction sa;
     memset(&sa, 0, sizeof(sa));
@@ -343,7 +377,10 @@ int main(int argc, char **argv) {
     }
 
     if (g_abort) {
-        fprintf(stderr, "\n\033[38;2;229;80;26m[INTERRUPT]\033[0m Process stopped\n");
+        if (ghost_color_enabled())
+            fprintf(stderr, "\033[38;2;229;80;26m[INTERRUPT]\033[0m Process stopped\n");
+        else
+            fprintf(stderr, "[INTERRUPT] Process stopped\n");
         rc = 130;
     }
 

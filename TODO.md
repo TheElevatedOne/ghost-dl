@@ -13,3 +13,6 @@
 - [x] Red-Hat Package
 - [x] Pacman package (.pkg.tar.zst)
 - [x] Album Art Preview
+- [x] Resumable downloads
+- [x] Track selection (`--tracks`)
+- [x] M3U playlist (`--playlist`)

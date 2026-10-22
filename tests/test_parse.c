@@ -71,6 +71,48 @@ int main(void) {
     expect(strcmp(pick_format(fmts, 2, "ogg,mp3", 0), "mp3") == 0, "preference list picks mp3");
     expect(strcmp(pick_format(fmts, 2, "flac", 0), "flac") == 0, "explicit flac");
 
+    expect(strcmp(pick_format(fmts, 2, "ogg", 0), "flac") == 0,
+           "missing preference falls back to best");
+    expect(match_format(fmts, 2, "ogg") == NULL, "match_format reports missing format");
+    expect(!is_audio_format("cd") && !is_audio_format("time") && is_audio_format("FLAC"),
+           "only real audio formats are accepted");
+
+    /* track selection */
+    unsigned char sel[10];
+    expect(parse_track_selection("1-3,5,9-", 10, sel) == 0 &&
+           sel[0] && sel[1] && sel[2] && !sel[3] && sel[4] && !sel[7] && sel[8] && sel[9],
+           "track selection ranges");
+    expect(parse_track_selection("-2", 10, sel) == 0 && sel[0] && sel[1] && !sel[2],
+           "track selection open start");
+    expect(parse_track_selection("4-20", 10, sel) == 0 && sel[9], "track selection clamps end");
+    expect(parse_track_selection("0", 10, sel) != 0, "track selection rejects 0");
+    expect(parse_track_selection("11", 10, sel) != 0, "track selection rejects out of range");
+    expect(parse_track_selection("3-1", 10, sel) != 0, "track selection rejects reversed range");
+    expect(parse_track_selection("a", 10, sel) != 0, "track selection rejects garbage");
+
+    /* url join */
+    s = url_join("https://downloads.khinsider.com/game-soundtracks/album/x", "/foo/bar");
+    expect(s && strcmp(s, "https://downloads.khinsider.com/foo/bar") == 0, "url join absolute path");
+    free(s);
+    s = url_join("https://downloads.khinsider.com/game-soundtracks/album/x", "y.mp3");
+    expect(s && strcmp(s, "https://downloads.khinsider.com/game-soundtracks/album/y.mp3") == 0,
+           "url join relative path");
+    free(s);
+    s = url_join("https://a.com/b", "//cdn.com/c");
+    expect(s && strcmp(s, "https://cdn.com/c") == 0, "url join protocol-relative");
+    free(s);
+
+    /* long names stay below NAME_MAX */
+    char longname[600];
+    memset(longname, 'a', sizeof(longname) - 1);
+    longname[sizeof(longname) - 1] = 0;
+    s = filename_sanitize(longname);
+    expect(s && strlen(s) <= 200, "long filename is truncated");
+    free(s);
+    s = html_text("<a>Android</a> , <a>iOS</a>", (size_t)-1);
+    expect(s && strcmp(s, "Android, iOS") == 0, "html text list spacing");
+    free(s);
+
     /* minecraft album */
     char *html = load_fix("album_minecraft.html");
     struct Album al;
@@ -90,6 +132,8 @@ int main(void) {
             has_flac = 1;
     }
     expect(has_mp3 && has_flac, "minecraft formats mp3+flac");
+    expect(al.nformats == 2, "minecraft has exactly mp3+flac (no CD column)");
+    expect(al.platforms && !strstr(al.platforms, " ,"), "platforms have no space before comma");
     expect(al.ncovers == 3, "minecraft 3 covers");
     expect(al.covers[0].thumb_url && strstr(al.covers[0].thumb_url, "thumbs") != NULL,
            "minecraft cover has thumbnail url");
@@ -136,12 +180,15 @@ int main(void) {
     /* song page */
     html = load_fix("song_key.html");
     char *url = NULL;
-    rc = parse_song_page(html, "mp3", &url);
+    char *ext = NULL;
+    rc = parse_song_page(html, "mp3", &url, &ext);
+    expect(ext && strcmp(ext, "mp3") == 0, "song ext mp3");
+    free(ext);
     expect(rc == 0 && url && strstr(url, ".mp3") && strstr(url, "http"), "song mp3 url");
     expect(url && strstr(url, "vgmtreasurechest") != NULL, "song url is on vgmtreasurechest");
     free(url);
     url = NULL;
-    rc = parse_song_page(html, "flac", &url);
+    rc = parse_song_page(html, "flac", &url, NULL);
     expect(rc == 0 && url && str_ends_ci(url, ".flac"), "song flac url");
     free(url);
     free(html);
