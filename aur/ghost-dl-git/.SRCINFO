@@ -13,7 +13,7 @@ pkgbase = ghost-dl-git
 	depends = curl
 	depends = ncurses
 	provides = ghost-dl
-	conflicts = ghost-dl-bin
+	conflicts = ghost-dl
 	source = git+https://github.com/TheElevatedOne/ghost-dl.git#branch=main
 	sha256sums = SKIP
 

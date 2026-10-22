@@ -1,4 +1,4 @@
-# Maintainer: Adam 'TheElevatedOne' Mladý <admin@elevated.ovh> -> https://github.com/TheElevatedOne
+# Maintainer: Adam Mlady <adam.mlady@elevated.ovh> -> https://github.com/TheElevatedOne
 
 pkgname=ghost-dl-git
 pkgver=2.2.0_r2_g258d649
@@ -14,7 +14,7 @@ makedepends=(
   'make'
 )
 provides=(ghost-dl)
-conflicts=(ghost-dl-bin)
+conflicts=(ghost-dl)
 source=("git+https://github.com/TheElevatedOne/ghost-dl.git#branch=main")
 sha256sums=("SKIP")
 
