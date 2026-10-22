@@ -1,0 +1,117 @@
+name: aur-bin
+
+# Publishes ghost-dl-bin to the AUR for a released tag: sets pkgver and the
+# tarball checksum, test-builds the package, pushes it to the AUR, and commits
+# the updated PKGBUILD/.SRCINFO back to main.
+#
+# Called by ghost-dl.yml after a release, or run by hand for an existing tag.
+# Needs the secrets AUR_SSH_KEY, AUR_USERNAME and AUR_EMAIL.
+
+on:
+  workflow_call:
+    inputs:
+      tag:
+        type: string
+        required: true
+    secrets:
+      AUR_SSH_KEY:
+        required: true
+      AUR_USERNAME:
+        required: true
+      AUR_EMAIL:
+        required: true
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Release tag to publish (e.g. 2.2.0)
+        type: string
+        required: true
+
+jobs:
+  aur-bin:
+    runs-on: ubuntu-latest
+    container:
+      image: archlinux:base-devel
+    permissions:
+      contents: write
+    env:
+      PKGNAME: ghost-dl-bin
+      PKGDIR: .aur/ghost-dl-bin
+      TAG: ${{ inputs.tag }}
+      GIT_CONFIG_COUNT: 1
+      GIT_CONFIG_KEY_0: safe.directory
+      GIT_CONFIG_VALUE_0: '*'
+    steps:
+      - name: Install tools
+        run: pacman -Syu --noconfirm git openssh
+
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - name: Set up AUR SSH
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.AUR_SSH_KEY }}" > ~/.ssh/aur
+          chmod 600 ~/.ssh/aur
+          ssh-keyscan -H aur.archlinux.org >> ~/.ssh/known_hosts
+
+      - name: Update PKGBUILD, test-build, regenerate .SRCINFO
+        run: |
+          VERSION="${TAG#v}"
+          URL="https://github.com/${GITHUB_REPOSITORY}/releases/download/${TAG}/ghost-dl-${VERSION}-linux-x86_64.tar.gz"
+          for i in 1 2 3 4 5; do curl -fsSL -o /tmp/release.tar.gz "$URL" && break; [ "$i" = 5 ] && exit 1; sleep $((i * 10)); done
+          SHA="$(sha256sum /tmp/release.tar.gz | cut -d' ' -f1)"
+          echo "[INFO] version ${VERSION}, sha256 ${SHA}"
+
+          cd "$PKGDIR"
+          OLD="$(sed -n 's/^pkgver=//p' PKGBUILD)"
+          sed -i "s/^pkgver=.*/pkgver=${VERSION}/" PKGBUILD
+          if [ "$OLD" != "$VERSION" ]; then
+            sed -i "s/^pkgrel=.*/pkgrel=1/" PKGBUILD
+          fi
+          sed -i "s/^sha256sums=.*/sha256sums=('${SHA}')/" PKGBUILD
+
+          useradd -m builder 2>/dev/null || true
+          rm -rf /home/builder/build
+          cp -a . /home/builder/build
+          chown -R builder:builder /home/builder/build
+          runuser -u builder -- bash -c '
+            set -e
+            cd /home/builder/build
+            makepkg -f --nodeps --noconfirm
+            makepkg --printsrcinfo > .SRCINFO
+          '
+          cp /home/builder/build/.SRCINFO .SRCINFO
+          cat PKGBUILD
+
+      - name: Push to AUR
+        env:
+          GIT_SSH_COMMAND: ssh -i ~/.ssh/aur -o IdentitiesOnly=yes
+        run: |
+          rm -rf /tmp/aur
+          for i in 1 2 3 4 5; do git clone "ssh://aur@aur.archlinux.org/${PKGNAME}.git" /tmp/aur && break; [ "$i" = 5 ] && exit 1; sleep $((i * 15)); done
+          cp "$PKGDIR/PKGBUILD" "$PKGDIR/.SRCINFO" /tmp/aur/
+          cd /tmp/aur
+          git config user.name "${{ secrets.AUR_USERNAME }}"
+          git config user.email "${{ secrets.AUR_EMAIL }}"
+          git add PKGBUILD .SRCINFO
+          if git diff --cached --quiet; then
+            echo "AUR is already up to date"
+          else
+            git commit -m "Update to ${TAG#v}"
+            git push origin HEAD:master
+          fi
+
+      - name: Commit PKGBUILD back to GitHub
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add "$PKGDIR/PKGBUILD" "$PKGDIR/.SRCINFO"
+          if git diff --cached --quiet; then
+            echo "Repository is already up to date"
+            exit 0
+          fi
+          git commit -m "chore: update ${PKGNAME} to ${TAG#v}"
+          for i in 1 2 3 4 5; do git pull --rebase origin main && git push origin HEAD:main && break; [ "$i" = 5 ] && exit 1; sleep $((i * 5)); done

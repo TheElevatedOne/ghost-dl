@@ -6,7 +6,7 @@
 #include <stdio.h>
 
 #ifndef GHOST_VERSION
-#define GHOST_VERSION "2.1.0"
+#define GHOST_VERSION "2.2.0"
 #endif
 
 #define GHOST_BASE_URL "https://downloads.khinsider.com"
@@ -29,6 +29,7 @@ struct Options {
     char *output;
     char *format;
     char *search;
+    char *tracks;
     int threads;
     int use_default;
     int quiet;
@@ -38,6 +39,7 @@ struct Options {
     int no_cover;
     int cover_only;
     int force;
+    int playlist;
     int tui;
 };
 
@@ -131,7 +133,9 @@ char *album_folder_name(const struct Album *al);
 char *track_filename(const struct Track *tr, int multi_disc, int num_width);
 int format_rank(const char *fmt);
 int is_audio_format(const char *fmt);
+const char *match_format(char **available, int n, const char *preference);
 const char *pick_format(char **available, int n, const char *preference, int use_default);
+int parse_track_selection(const char *spec, int n, unsigned char *sel);
 int default_thread_count(void);
 char *slug_from_input(const char *in);
 int looks_like_url(const char *s);
@@ -149,18 +153,21 @@ void options_free(struct Options *opt);
 /* http */
 int http_global_init(void);
 void http_global_cleanup(void);
-int http_get(const char *url, char **body, size_t *len, char **final_url);
-int http_download(const char *url, const char *path,
+void http_set_abort_flag(volatile int *flag);
+int http_get(const char *url, const char *referer, char **body, size_t *len,
+             char **final_url, long *status);
+int http_download(const char *url, const char *path, const char *referer,
                   int (*progress)(void *ud, int64_t total, int64_t now),
                   void *ud, int64_t *out_total, volatile int *abort_flag);
 
 /* parse */
 int parse_album_page(const char *html, const char *page_url, struct Album *out);
 int parse_search_page(const char *html, const char *final_url, struct SearchResults *out);
-int parse_song_page(const char *html, const char *want_ext, char **download_url);
+int parse_song_page(const char *html, const char *want_ext, char **download_url,
+                    char **ext_out);
 int fetch_album(const char *input, struct Album *out);
 int fetch_search(const char *query, struct SearchResults *out);
-int resolve_track_url(struct Track *tr, const char *fmt);
+int resolve_track_url(struct Track *tr, const char *fmt, const char *referer);
 int resolve_album_tracks(struct Album *al, const char *fmt, int threads, volatile int *abort_flag);
 
 /* download */

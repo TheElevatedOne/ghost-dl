@@ -25,7 +25,7 @@
 | Fedora / RHEL | `ghost-dl-*.x86_64.rpm` | `sudo dnf install ./ghost-dl-*.rpm` |
 | Arch Linux | `ghost-dl-*-x86_64.pkg.tar.zst` | `sudo pacman -U ghost-dl-*.pkg.tar.zst` |
 
-A generic `ghost-dl-*-linux-x86_64.tar.gz` tarball is also attached. Arch users can install from the AUR (`ghost-dl-git` or `ghost-dl-bin`).
+A generic `ghost-dl-*-linux-x86_64.tar.gz` tarball and a macOS (Apple Silicon) `ghost-dl-*-macos-arm64.tar.gz` tarball are also attached. Arch users can install from the AUR (`ghost-dl-git` or `ghost-dl-bin`).
 
 ```
 usage: ghost-dl [OPTIONS] [INPUT...]
@@ -47,9 +47,12 @@ Download:
                       (e.g. flac,mp3)
   -d, --default       Highest quality without prompting
   -y, --yes           Same as --default
+  -T, --tracks LIST   Only download these tracks, by position as shown
+                      by --info (e.g. 1-5,8,12-)
+      --playlist      Write playlist.m3u8 into the album folder
       --no-cover      Skip album art
       --cover-only    Download only album art
-      --force         Overwrite existing files
+      --force         Re-download files that already exist
 
 Logging:
   -q, --quiet         Suppress log messages
@@ -62,7 +65,9 @@ Run `ghost-dl` with no arguments to open the search TUI.
 - **Search TUI** - type a query, press Enter, inspect album info, pick a format, and download
 - **Output** - directory to write into (created if needed). Each album is stored in `YEAR - Title (Type)/`
 - **Threads** - parallel page fetches and downloads (default CPU cores / 2, capped at 8)
-- **Format** - `mp3`, `flac`, `ogg`, … If omitted, you are prompted. `--default` picks the highest quality available (FLAC over MP3, etc.)
+- **Format** - `mp3`, `flac`, `ogg`, … If omitted, you are prompted. `--default` picks the highest quality available (FLAC over MP3, etc.). If a single track is missing in the chosen format, the best other format is used for it
+- **Tracks** - pick a subset of the album by position (`--info` lists the positions), e.g. `--tracks 1-5,8,12-`
+- **Resume** - files download to `*.part` and are renamed when complete. Interrupt with Ctrl-C (press twice to quit immediately) and rerun the same command to resume. Finished files are skipped
 - **Quiet / Verbose** - cannot be combined
 
 ### Examples
@@ -78,8 +83,9 @@ ghost-dl --search "celeste"
 ghost-dl -d -f flac minecraft
 ghost-dl -d -o ~/Music https://downloads.khinsider.com/game-soundtracks/album/minecraft
 
-# Inspect an album
+# Inspect an album, then grab only a few tracks plus a playlist
 ghost-dl --info persona-5
+ghost-dl -d --tracks 1-5,9 --playlist persona-5
 
 # Batch file (one URL or slug per line, # comments allowed)
 ghost-dl -d albums.txt
@@ -96,6 +102,7 @@ ghost-dl -d albums.txt
 | f | Cycle audio format |
 | d | Download selected album |
 | / | Focus search |
+| Ctrl-U | Clear the search query |
 | q | Quit |
 
 Supported platforms: Linux and macOS. Windows users can build with MSYS2/MinGW or run under WSL.

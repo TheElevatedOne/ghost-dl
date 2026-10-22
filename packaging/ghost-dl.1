@@ -1,4 +1,4 @@
-.TH GHOST-DL 1 "2026-09-14" "ghost-dl 2.1.0" "User Commands"
+.TH GHOST-DL 1 "2026-10-22" "ghost-dl 2.2.0" "User Commands"
 .SH NAME
 ghost-dl \- download game OSTs from KHInsider
 .SH SYNOPSIS
@@ -46,6 +46,17 @@ Audio format, or a comma-separated preference list (for example
 .BR \-d ", " \-\-default ", " \-y ", " \-\-yes
 Pick the highest quality format without prompting.
 .TP
+.BR \-T ", " \-\-tracks " " \fILIST\fR
+Only download the listed tracks, by their position in the album as shown by
+.BR \-\-info .
+\fILIST\fR is a comma-separated list of numbers and ranges, for example
+.BR 1\-5,8,12\- .
+.TP
+.B \-\-playlist
+Write
+.I playlist.m3u8
+into the album folder.
+.TP
 .B \-\-no\-cover
 Skip album art.
 .TP
@@ -53,7 +64,7 @@ Skip album art.
 Download only album art.
 .TP
 .B \-\-force
-Overwrite existing files.
+Re-download files that already exist.
 .SS Logging
 .TP
 .BR \-q ", " \-\-quiet
@@ -61,6 +72,17 @@ Suppress progress and log messages.
 .TP
 .BR \-v ", " \-\-verbose
 Show extra log messages.
+.SH DOWNLOADS
+Files are written as
+.IR NAME .part
+and renamed when complete. If a download is interrupted, running the same
+command again resumes partial files and skips finished ones.
+.PP
+If a track is not available in the chosen format, the best other format is
+used for that track. Requests rejected by the server (for example HTTP 403 or
+429) are retried with a short backoff.
+.PP
+Press Ctrl\-C once to stop cleanly, or twice to quit immediately.
 .SH TUI KEYS
 .TP
 type, Enter
@@ -84,6 +106,9 @@ Download selected album.
 /
 Focus search.
 .TP
+Ctrl\-U
+Clear the search query.
+.TP
 q
 Quit.
 .SH EXAMPLES
@@ -91,6 +116,7 @@ Quit.
 ghost-dl
 ghost-dl \-\-search celeste
 ghost-dl \-d \-f flac minecraft
+ghost-dl \-d \-\-tracks 1\-5,9 minecraft
 ghost-dl \-o ~/Music https://downloads.khinsider.com/game-soundtracks/album/minecraft
 ghost-dl \-\-info persona-5
 ghost-dl \-d urls.txt
@@ -99,6 +125,28 @@ ghost-dl \-d urls.txt
 Each album is written to a directory named
 .IR "YEAR \- Title (Type)"
 under the output directory.
+.SH EXIT STATUS
+.TP
+.B 0
+Success.
+.TP
+.B 1
+Some downloads failed.
+.TP
+.B 2
+Invalid usage.
+.TP
+.B 3
+Network error.
+.TP
+.B 4
+An album could not be loaded or parsed.
+.TP
+.B 5
+A file could not be read or written.
+.TP
+.B 130
+Interrupted.
 .SH AUTHOR
 Adam Mladý <admin@elevated.ovh>
 .SH COPYRIGHT

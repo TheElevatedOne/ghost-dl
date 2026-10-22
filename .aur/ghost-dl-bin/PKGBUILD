@@ -1,17 +1,18 @@
-# Maintainer: Fabio 'Lolix' Loli <fabio.loli@disroot.org> -> https://github.com/FabioLolix
+# Maintainer: Adam 'TheElevatedOne' Mladý <admin@elevated.ovh> -> https://github.com/TheElevatedOne
+# Contributor: Fabio 'Lolix' Loli <fabio.loli@disroot.org> -> https://github.com/FabioLolix
 # Contributor: Linus Dierheimer <Linus@Dierheimer.de>
 
 pkgname=ghost-dl-bin
-pkgver=2.1.0
+pkgver=2.2.0
 pkgrel=1
 pkgdesc="Kingdom Hearts Insider Game OST Archive Downloader CLI/TUI"
 arch=(x86_64)
 url="https://github.com/TheElevatedOne/ghost-dl"
-license=(GPL3)
+license=('GPL-3.0-or-later')
 depends=(glibc curl ncurses)
 provides=(ghost-dl)
 conflicts=(ghost-dl-git)
-source=("https://github.com/TheElevatedOne/ghost-dl/releases/download/v${pkgver}/ghost-dl-${pkgver}-linux-x86_64.tar.gz")
+source=("https://github.com/TheElevatedOne/ghost-dl/releases/download/${pkgver}/ghost-dl-${pkgver}-linux-x86_64.tar.gz")
 sha256sums=("SKIP")
 
 package() {

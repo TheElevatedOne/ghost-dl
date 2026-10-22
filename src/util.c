@@ -232,11 +232,25 @@ char *filename_sanitize(const char *name) {
             d[j++] = (char)c;
         }
     }
+    d[j] = 0;
+    /* Stay well below NAME_MAX (255 bytes) so an extension and suffix fit. */
+    if (j > 200) {
+        j = 200;
+        while (j > 0 && ((unsigned char)d[j] & 0xC0) == 0x80)
+            j--;
+    }
     while (j > 0 && (d[j - 1] == ' ' || d[j - 1] == '.'))
         j--;
     d[j] = 0;
-    if (!d[0] || strcmp(d, ".") == 0 || strcmp(d, "..") == 0)
-        strcpy(d, "untitled");
+    char *t = d;
+    while (*t == ' ')
+        t++;
+    if (t != d)
+        memmove(d, t, strlen(t) + 1);
+    if (!d[0] || strcmp(d, ".") == 0 || strcmp(d, "..") == 0) {
+        free(d);
+        return xstrdup("untitled");
+    }
     return d;
 }
 
@@ -306,7 +320,18 @@ char *url_join(const char *base, const char *href) {
         strcpy(d + hostlen, href);
         return d;
     }
-    return path_join(base ? base : GHOST_BASE_URL, href);
+    /* relative: replace the last path segment of base */
+    const char *b = base ? base : GHOST_BASE_URL "/";
+    const char *scheme = strstr(b, "://");
+    const char *host = scheme ? scheme + 3 : b;
+    const char *last = strrchr(host, '/');
+    size_t keep = last ? (size_t)(last - b) + 1 : strlen(b);
+    char *d = xmalloc(keep + strlen(href) + 2);
+    memcpy(d, b, keep);
+    if (!last)
+        d[keep++] = '/';
+    strcpy(d + keep, href);
+    return d;
 }
 
 char *html_unescape(const char *s) {
@@ -360,7 +385,18 @@ char *html_unescape(const char *s) {
             {"&nbsp;", " "},  {"&ndash;", "-"}, {"&mdash;", "-"},
             {"&eacute;", "é"}, {"&Eacute;", "É"}, {"&egrave;", "è"},
             {"&agrave;", "à"}, {"&ouml;", "ö"}, {"&uuml;", "ü"},
-            {"&auml;", "ä"},   {"&copy;", "(c)"}, {NULL, NULL},
+            {"&auml;", "ä"},   {"&Ouml;", "Ö"}, {"&Uuml;", "Ü"},
+            {"&Auml;", "Ä"},   {"&szlig;", "ß"}, {"&ccedil;", "ç"},
+            {"&ntilde;", "ñ"}, {"&aacute;", "á"}, {"&iacute;", "í"},
+            {"&oacute;", "ó"}, {"&uacute;", "ú"}, {"&ecirc;", "ê"},
+            {"&ocirc;", "ô"},  {"&acirc;", "â"}, {"&icirc;", "î"},
+            {"&ucirc;", "û"},  {"&iuml;", "ï"}, {"&euml;", "ë"},
+            {"&lsquo;", "\u2018"}, {"&rsquo;", "\u2019"},
+            {"&ldquo;", "\u201C"}, {"&rdquo;", "\u201D"},
+            {"&hellip;", "\u2026"}, {"&times;", "\u00D7"},
+            {"&trade;", "\u2122"}, {"&reg;", "\u00AE"},
+            {"&deg;", "\u00B0"},   {"&star;", "\u2606"},
+            {"&copy;", "\u00A9"}, {NULL, NULL},
         };
         int hit = 0;
         for (int e = 0; ents[e].ent; e++) {
@@ -422,6 +458,14 @@ char *html_text(const char *s, size_t n) {
             un[j++] = *p;
             sp = 0;
         }
+    }
+    un[j] = 0;
+    /* "a , b" -> "a, b" (tags around list items leave a stray space) */
+    j = 0;
+    for (char *p = un; *p; p++) {
+        if (*p == ' ' && (p[1] == ',' || p[1] == ';'))
+            continue;
+        un[j++] = *p;
     }
     un[j] = 0;
     return un;
@@ -505,36 +549,28 @@ char *track_filename(const struct Track *tr, int multi_disc, int num_width) {
         snprintf(prefix, sizeof(prefix), "CD%d ", tr->disc);
     char *safe = filename_sanitize(tr->title ? tr->title : "track");
     const char *ext = tr->ext && tr->ext[0] ? tr->ext : "mp3";
-    char *out = xmalloc(strlen(prefix) + strlen(safe) + 32);
+    size_t cap = strlen(prefix) + strlen(safe) + strlen(ext) + 32;
+    char *out = xmalloc(cap);
     if (tr->number > 0)
-        sprintf(out, "%s%0*d. %s.%s", prefix, num_width, tr->number, safe, ext);
+        snprintf(out, cap, "%s%0*d. %s.%s", prefix, num_width, tr->number, safe, ext);
     else
-        sprintf(out, "%s%s.%s", prefix, safe, ext);
+        snprintf(out, cap, "%s%s.%s", prefix, safe, ext);
     free(safe);
     return out;
 }
 
 static const char *FORMAT_RANK[] = {
-    "flac", "wav", "aiff", "alac", "ape", "tak", "tta",
-    "ogg", "opus", "aac", "m4a", "wma", "mp3", NULL
+    "flac", "wav", "aiff", "aif", "alac", "ape", "wv", "tak", "tta",
+    "opus", "ogg", "m4a", "aac", "mpc", "wma", "mp3", "mp2", NULL
 };
 
 int is_audio_format(const char *fmt) {
     if (!fmt || !*fmt)
         return 0;
+    /* Only known formats: songlist headers also contain "CD", "#", "Time"... */
     for (int i = 0; FORMAT_RANK[i]; i++) {
         if (str_eq_ci(fmt, FORMAT_RANK[i]))
             return 1;
-    }
-    /* short unknown tokens that look like extensions */
-    size_t n = strlen(fmt);
-    if (n >= 2 && n <= 5) {
-        int ok = 1;
-        for (size_t i = 0; i < n; i++) {
-            if (!isalnum((unsigned char)fmt[i]))
-                ok = 0;
-        }
-        return ok;
     }
     return 0;
 }
@@ -549,39 +585,94 @@ int format_rank(const char *fmt) {
     return 500;
 }
 
+/* First entry of the comma-separated PREFERENCE list that the album offers. */
+const char *match_format(char **available, int n, const char *preference) {
+    if (!available || n <= 0 || !preference || !*preference)
+        return NULL;
+    char *pref = xstrdup(preference);
+    char *save = NULL;
+    const char *hit = NULL;
+    for (char *tok = strtok_r(pref, ", ", &save); tok && !hit;
+         tok = strtok_r(NULL, ", ", &save)) {
+        if (*tok == '.')
+            tok++;
+        for (int i = 0; i < n; i++) {
+            if (str_eq_ci(available[i], tok)) {
+                hit = available[i];
+                break;
+            }
+        }
+    }
+    free(pref);
+    return hit;
+}
+
+/* The preferred format if available, otherwise the highest quality one. */
 const char *pick_format(char **available, int n, const char *preference, int use_default) {
+    (void)use_default;
     if (!available || n <= 0)
         return "mp3";
-    if (preference && *preference) {
-        char *pref = xstrdup(preference);
-        char *save = NULL;
-        for (char *tok = strtok_r(pref, ", ", &save); tok; tok = strtok_r(NULL, ", ", &save)) {
-            if (*tok == '.')
-                tok++;
-            for (int i = 0; i < n; i++) {
-                if (str_eq_ci(available[i], tok)) {
-                    const char *hit = available[i];
-                    free(pref);
-                    return hit;
-                }
+    const char *hit = match_format(available, n, preference);
+    if (hit)
+        return hit;
+    int best = 0;
+    int best_rank = format_rank(available[0]);
+    for (int i = 1; i < n; i++) {
+        int r = format_rank(available[i]);
+        if (r < best_rank) {
+            best_rank = r;
+            best = i;
+        }
+    }
+    return available[best];
+}
+
+/*
+ * Parse a track selection such as "1-5,8,12-" into SEL[0..n-1].
+ * "-3" means 1-3 and "12-" means 12 to the end. Returns -1 on bad input.
+ */
+int parse_track_selection(const char *spec, int n, unsigned char *sel) {
+    if (!spec || !*spec || n <= 0)
+        return -1;
+    memset(sel, 0, (size_t)n);
+    const char *p = spec;
+    int any = 0;
+    while (*p) {
+        while (*p == ' ' || *p == ',')
+            p++;
+        if (!*p)
+            break;
+        long a = 1, b;
+        char *end;
+        if (*p != '-') {
+            a = strtol(p, &end, 10);
+            if (end == p)
+                return -1;
+            p = end;
+        }
+        b = a;
+        if (*p == '-') {
+            p++;
+            if (isdigit((unsigned char)*p)) {
+                b = strtol(p, &end, 10);
+                p = end;
+            } else {
+                b = n;
             }
         }
-        free(pref);
-        /* requested format missing: fall through */
+        while (*p == ' ')
+            p++;
+        if (*p && *p != ',')
+            return -1;
+        if (a < 1 || b < a || a > n)
+            return -1;
+        if (b > n)
+            b = n;
+        for (long i = a; i <= b; i++)
+            sel[i - 1] = 1;
+        any = 1;
     }
-    if (use_default || !preference) {
-        int best = 0;
-        int best_rank = format_rank(available[0]);
-        for (int i = 1; i < n; i++) {
-            int r = format_rank(available[i]);
-            if (r < best_rank) {
-                best_rank = r;
-                best = i;
-            }
-        }
-        return available[best];
-    }
-    return available[n - 1];
+    return any ? 0 : -1;
 }
 
 char *read_file_text(const char *path, size_t *len) {
@@ -708,6 +799,7 @@ void options_free(struct Options *opt) {
     free(opt->output);
     free(opt->format);
     free(opt->search);
+    free(opt->tracks);
     memset(opt, 0, sizeof(*opt));
 }
 

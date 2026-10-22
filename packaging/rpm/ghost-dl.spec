@@ -31,5 +31,9 @@ cp -a %{_ghost_stage}/. %{buildroot}/
 %license %{_datadir}/licenses/ghost-dl/LICENSE
 
 %changelog
+* Thu Oct 22 2026 Adam Mladý <admin@elevated.ovh> - 2.2.0-1
+- Work with KHInsider's Cloudflare protection; retry blocked requests
+- Resume interrupted downloads; per-track format fallback
+- New --tracks and --playlist options; TUI and progress display fixes
 * Mon Sep 14 2026 Adam Mladý <admin@elevated.ovh> - %{_ghost_version}-1
 - C rewrite with CLI, TUI, and native packages

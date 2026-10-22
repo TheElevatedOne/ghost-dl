@@ -78,7 +78,7 @@ build_deb() {
   cat > "$stage/usr/share/doc/ghost-dl/changelog.Debian" <<EOF
 ghost-dl (${VERSION}-${RELEASE}) unstable; urgency=medium
 
-  * Native C package for Debian/Ubuntu.
+  * Release ${VERSION}. See https://github.com/TheElevatedOne/ghost-dl/releases
 
  -- ${MAINTAINER}  $(date -u '+%a, %d %b %Y %H:%M:%S +0000')
 EOF
