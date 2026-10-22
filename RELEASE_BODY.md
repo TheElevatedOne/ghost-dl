@@ -27,3 +27,5 @@
 ### Packages
 
 Debian `.deb`, RPM `.rpm`, pacman `.pkg.tar.zst`, a Linux x86_64 tarball, and a macOS arm64 tarball.
+
+The AUR `ghost-dl-bin` package is now updated automatically after each release.

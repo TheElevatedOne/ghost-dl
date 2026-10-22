@@ -102,3 +102,13 @@ jobs:
           name: ${{ github.ref_name }} - ghost-dl
           bodyFile: "RELEASE_BODY.md"
           allowUpdates: true
+
+  aur-bin:
+    if: startsWith(github.ref, 'refs/tags/')
+    needs: release
+    permissions:
+      contents: write
+    uses: ./.github/workflows/aur-bin.yml
+    with:
+      tag: ${{ github.ref_name }}
+    secrets: inherit
